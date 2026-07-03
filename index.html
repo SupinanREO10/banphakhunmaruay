@@ -3,204 +3,1029 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>แดชบอร์ด | ระบบหลังบ้าน บ้านผ้าคุณมารวย</title>
+<title>บ้านผ้าคุณมารวย | ผ้าไหมไทยแท้ &amp; ชุดผ้าไทยตัดสำเร็จ</title>
+<meta name="description" content="บ้านผ้าคุณมารวย ผ้าไหมไทยแท้และชุดผ้าไทยตัดสำเร็จ คัดสรรคุณภาพ สินค้าใหม่มือ 1 และมือสองชิ้นพิเศษ สั่งซื้อง่ายผ่าน LINE" />
 
 <!--
   ==========================================================================
-  ร่างระบบหลังบ้าน (Draft Admin Backend) — บ้านผ้าคุณมารวย
-  หน้านี้เป็นแดชบอร์ดภาพรวม ใช้ข้อมูลจำลองทั้งหมดจาก assets/admin-data.js
-  TODO ก่อนใช้งานจริง:
-  1) เชื่อม KPI และตารางกับ Google Apps Script Web App (อ่านจาก Sheets จริง)
-  2) เพิ่มระบบยืนยันตัวตนแอดมิน (ตอนนี้ยังไม่มีการล็อกอิน/สิทธิ์การเข้าถึง)
-  3) เชื่อมกราฟยอดขายกับข้อมูล orders จริงแทน ADMIN_SALES_7D
+  ร่างหน้าเว็บขายสินค้า (Draft) — บ้านผ้าคุณมารวย
+  ข้อมูลธุรกิจ (LINE OA ID, เบอร์โทร, ลิงก์เพจเฟซบุ๊ก 2 เพจ) ใส่ค่าจริงครบแล้ว
+  จุดที่ยังเหลือต้องทำก่อนใช้งานจริง:
+  1) ข้อมูลสินค้าดึงจาก Google Sheets จริงผ่าน Apps Script แล้ว (ดู initStorefront ท้ายไฟล์)
+     — เหลือแค่ตั้งค่า API_BASE_URL ใน config.js ให้ถูกต้อง (ดูคู่มือติดตั้ง)
+  2) ภาพสินค้าจริง — ตอนนี้ใช้กรอบภาพ placeholder แทนภาพถ่ายจริง
+  3) วันที่สิ้นสุด Flash Sale ดึงจากแท็บ promotions จริงแล้ว (ดูฟังก์ชัน setupFlashSale())
+  ไฟล์นี้ใช้รูปภาพร่วมโฟลเดอร์เดียวกัน: logo หลัก.png, logo บ้านผ้าคุณมารวย.png,
+  logo ไหมใหม่ไม่ใหม่.png, promptpay_qr.png — ต้องอยู่โฟลเดอร์เดียวกับไฟล์นี้เสมอ
   ==========================================================================
 -->
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/admin.css">
+
+<style>
+  :root{
+    --gold: #c9a227;
+    --gold-light: #e6c85a;
+    --brown-deep: #2c1b12;
+    --brown: #4a2f1d;
+    --brown-soft: #6b4a30;
+    --cream: #faf4e6;
+    --cream-2: #f2e7d0;
+    --ivory: #fffaf0;
+    --plum: #5b3758;
+    --ink: #2a2118;
+    --line-green: #06c755;
+    --shadow: 0 10px 30px rgba(44,27,18,0.15);
+    --radius: 16px;
+  }
+
+  *{ box-sizing: border-box; margin:0; padding:0; }
+
+  html{ scroll-behavior: smooth; }
+
+  body{
+    font-family: 'Prompt', sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    line-height: 1.7;
+    font-size: 17px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,h2,h3,h4{
+    font-family: 'Noto Serif Thai', serif;
+    color: var(--brown-deep);
+    line-height: 1.35;
+  }
+
+  img{ max-width:100%; display:block; }
+  a{ color: inherit; text-decoration:none; }
+  ul{ list-style:none; }
+  .container{ max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+  section{ padding: 72px 0; }
+
+  .eyebrow{
+    display:inline-block;
+    letter-spacing: 3px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .divider-orn{
+    text-align:center;
+    color: var(--gold);
+    font-size: 22px;
+    letter-spacing: 12px;
+    margin: 8px 0 28px;
+    opacity: .85;
+  }
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    padding: 16px 30px;
+    border-radius: 999px;
+    font-family:'Prompt',sans-serif;
+    font-weight: 600;
+    font-size: 17px;
+    cursor:pointer;
+    border: 2px solid transparent;
+    transition: transform .15s ease, box-shadow .15s ease, background .2s ease;
+    min-height: 52px;
+  }
+  .btn:active{ transform: scale(0.97); }
+  .btn-gold{
+    background: linear-gradient(135deg, var(--gold-light), var(--gold));
+    color: var(--brown-deep);
+    box-shadow: 0 8px 20px rgba(201,162,39,0.35);
+  }
+  .btn-gold:hover{ box-shadow: 0 10px 26px rgba(201,162,39,0.5); }
+  .btn-outline{
+    background: transparent;
+    color: var(--ivory);
+    border-color: rgba(255,250,240,0.6);
+  }
+  .btn-outline:hover{ background: rgba(255,250,240,0.12); }
+  .btn-line{
+    background: var(--line-green);
+    color: #fff;
+    box-shadow: 0 8px 20px rgba(6,199,85,0.35);
+  }
+  .btn-line:hover{ box-shadow: 0 10px 26px rgba(6,199,85,0.5); }
+  .btn-block{ width:100%; }
+  .btn-sm{ padding: 12px 20px; font-size: 15px; min-height: 44px; }
+
+  /* ---------- Header ---------- */
+  header{
+    position: sticky; top:0; z-index: 100;
+    background: rgba(250,244,230,0.96);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--cream-2);
+  }
+  .nav-wrap{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 10px 24px;
+    max-width: 1180px; margin: 0 auto;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand img{ height: 52px; width:auto; }
+  .brand-text{ font-family:'Noto Serif Thai',serif; font-weight:700; color:var(--brown-deep); font-size: 18px; line-height:1.2; }
+  .brand-text span{ display:block; font-family:'Prompt',sans-serif; font-weight:400; font-size:12px; color: var(--brown-soft); letter-spacing:1px; }
+
+  nav.links{ display:flex; align-items:center; gap: 28px; }
+  nav.links a{ font-weight:500; color: var(--brown); font-size: 15.5px; }
+  nav.links a:hover{ color: var(--gold); }
+
+  .nav-cta{ display:flex; align-items:center; gap:12px; }
+  .hamburger{ display:none; background:none; border:none; font-size:26px; color:var(--brown-deep); cursor:pointer; }
+
+  @media (max-width: 900px){
+    nav.links{
+      position:fixed; top:74px; left:0; right:0; bottom:0;
+      background: var(--ivory);
+      flex-direction:column; align-items:flex-start; gap:0;
+      padding: 10px 24px 30px;
+      transform: translateX(-100%);
+      transition: transform .25s ease;
+      overflow-y:auto;
+    }
+    nav.links.open{ transform: translateX(0); }
+    nav.links a{ padding: 16px 0; width:100%; border-bottom:1px solid var(--cream-2); font-size:18px; }
+    .hamburger{ display:block; }
+    .nav-cta .btn-sm-desktop{ display:none; }
+    .nav-line-cta{ margin-top:14px; border-bottom:none !important; justify-content:center; }
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    position:relative;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(201,162,39,0.18), transparent 45%),
+      radial-gradient(circle at 85% 80%, rgba(201,162,39,0.14), transparent 45%),
+      linear-gradient(160deg, var(--brown-deep), var(--brown) 60%, var(--brown-soft));
+    color: var(--ivory);
+    padding: 90px 0 100px;
+    overflow:hidden;
+  }
+  .hero-grid{
+    position:relative; z-index:1;
+    display:grid; grid-template-columns: 1.1fr 0.9fr; gap: 50px; align-items:center;
+  }
+  @media (max-width: 900px){ .hero-grid{ grid-template-columns: 1fr; text-align:center; } }
+
+  .hero h1{
+    color: var(--ivory);
+    font-size: clamp(32px, 4.2vw, 48px);
+    margin-bottom: 18px;
+  }
+  .hero h1 em{ color: var(--gold-light); font-style: normal; }
+  .hero p.lead{
+    font-size: 18px;
+    color: rgba(255,250,240,0.85);
+    max-width: 520px;
+    margin-bottom: 30px;
+  }
+  @media (max-width:900px){ .hero p.lead{ margin-left:auto; margin-right:auto; } }
+  .hero-actions{ display:flex; gap:16px; flex-wrap:wrap; }
+  @media (max-width:900px){ .hero-actions{ justify-content:center; } }
+
+  .hero-badge-row{
+    display:flex; gap:28px; margin-top: 44px; flex-wrap:wrap;
+  }
+  @media (max-width:900px){ .hero-badge-row{ justify-content:center; } }
+  .hero-badge{ display:flex; align-items:center; gap:10px; font-size:14.5px; color: rgba(255,250,240,0.85); }
+  .hero-badge .dot{ width:8px; height:8px; border-radius:50%; background: var(--gold-light); flex-shrink:0; }
+
+  .hero-visual{
+    background: rgba(255,250,240,0.06);
+    border: 1px solid rgba(255,250,240,0.18);
+    border-radius: 28px;
+    padding: 30px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+    position:relative;
+  }
+  .hero-visual img{ filter: drop-shadow(0 20px 40px rgba(0,0,0,0.35)); }
+
+  .hero-slider{ position:relative; width:100%; min-height:300px; display:flex; align-items:center; justify-content:center; }
+  .hero-slide{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    opacity:0; transform: scale(0.96); transition: opacity .6s ease, transform .6s ease; pointer-events:none;
+  }
+  .hero-slide.active{ opacity:1; transform:scale(1); pointer-events:auto; position:relative; }
+  .hero-slide .feat-card{
+    background: rgba(255,250,240,0.08); border:1px solid rgba(255,250,240,0.2);
+    border-radius:20px; padding:26px; text-align:center; width:100%; max-width:300px;
+  }
+  .hero-slide .feat-icon{ font-size:52px; margin-bottom:14px; }
+  .hero-slide .feat-badge{
+    display:inline-block; background:var(--gold); color:var(--brown-deep); font-size:12px; font-weight:700;
+    padding:4px 14px; border-radius:999px; margin-bottom:12px; letter-spacing:.5px;
+  }
+  .hero-slide .feat-name{ color:var(--ivory); font-family:'Noto Serif Thai',serif; font-size:19px; margin-bottom:6px; }
+  .hero-slide .feat-price{ color:var(--gold-light); font-weight:700; font-size:20px; }
+  .hero-slider-dots{ display:flex; gap:8px; justify-content:center; }
+  .hero-slider-dots .hdot{ width:9px; height:9px; border-radius:50%; background: rgba(255,250,240,0.3); cursor:pointer; transition: background .2s ease, transform .2s ease; }
+  .hero-slider-dots .hdot.active{ background: var(--gold-light); transform: scale(1.25); }
+  .hero-slide-label{ font-size:13px; color: rgba(255,250,240,0.6); text-align:center; }
+
+  /* ---------- Trust bar ---------- */
+  .trust{
+    background: var(--ivory);
+    border-bottom: 1px solid var(--cream-2);
+  }
+  .trust-grid{
+    display:grid; grid-template-columns: repeat(4,1fr); gap: 20px;
+    padding: 30px 0;
+  }
+  @media (max-width: 900px){ .trust-grid{ grid-template-columns: repeat(2,1fr); } }
+  .trust-item{ display:flex; align-items:center; gap:12px; }
+  .trust-item .ic{
+    width:44px; height:44px; border-radius:50%;
+    background: var(--cream-2); color: var(--gold);
+    display:flex; align-items:center; justify-content:center;
+    font-size: 20px; flex-shrink:0;
+  }
+  .trust-item .tt{ font-weight:600; font-size:15px; color: var(--brown-deep); }
+  .trust-item .ds{ font-size:13px; color: var(--brown-soft); }
+
+  /* ---------- Flash sale ---------- */
+  .flash-sale{
+    background: linear-gradient(120deg, var(--brown-deep), var(--plum));
+    padding: 46px 0;
+  }
+  .flash-sale-inner{
+    display:flex; align-items:center; justify-content:space-between; gap:40px; flex-wrap:wrap;
+  }
+  .flash-copy{ max-width:560px; }
+  .flash-copy h2{ color:var(--ivory); font-size: clamp(22px,2.6vw,30px); margin:6px 0 10px; }
+  .flash-copy p{ color: rgba(255,250,240,0.8); margin-bottom:20px; font-size:15px; }
+  .countdown{ display:flex; align-items:center; gap:10px; }
+  .cd-box{
+    background: rgba(255,250,240,0.08); border:1px solid rgba(255,250,240,0.25);
+    border-radius:14px; padding:14px 18px; text-align:center; min-width:76px;
+  }
+  .cd-box span{ display:block; font-family:'Noto Serif Thai',serif; font-size:32px; font-weight:700; color: var(--gold-light); line-height:1; }
+  .cd-box small{ font-size:11.5px; color: rgba(255,250,240,0.7); letter-spacing:1px; }
+  .cd-sep{ color: var(--gold-light); font-size:28px; font-weight:700; }
+  @media (max-width:700px){ .flash-sale-inner{ justify-content:center; text-align:center; } }
+
+  /* ---------- Section heading ---------- */
+  .section-head{ text-align:center; max-width: 640px; margin: 0 auto 44px; }
+  .section-head h2{ font-size: clamp(26px,3vw,36px); }
+  .section-head p{ color: var(--brown-soft); margin-top: 12px; font-size: 16px; }
+
+  /* ---------- Category tabs ---------- */
+  .cat-tabs{
+    display:flex; justify-content:center; gap: 14px; flex-wrap:wrap; margin-bottom: 26px;
+  }
+  .cat-tab{
+    padding: 12px 26px; border-radius: 999px; font-weight:600; cursor:pointer;
+    border: 2px solid var(--gold);
+    color: var(--brown-deep); background: transparent;
+    font-family:'Prompt',sans-serif; font-size:15.5px;
+    transition: all .2s ease;
+  }
+  .cat-tab.active, .cat-tab:hover{ background: var(--gold); color: var(--brown-deep); }
+
+  .sub-filters{
+    display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-bottom: 44px;
+  }
+  .chip{
+    padding: 8px 18px; border-radius: 999px; font-size: 14px; cursor:pointer;
+    background: var(--cream-2); color: var(--brown);
+    border: 1px solid transparent;
+  }
+  .chip.active{ background: var(--brown-deep); color: var(--ivory); }
+
+  /* ---------- Product grid ---------- */
+  .product-grid{
+    display:grid; grid-template-columns: repeat(3, 1fr); gap: 28px;
+  }
+  @media (max-width: 900px){ .product-grid{ grid-template-columns: repeat(2,1fr); gap:18px; } }
+  @media (max-width: 560px){ .product-grid{ grid-template-columns: 1fr; } }
+
+  .card{
+    background: var(--ivory);
+    border-radius: var(--radius);
+    overflow:hidden;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--cream-2);
+    display:flex; flex-direction:column;
+    transition: transform .2s ease, box-shadow .2s ease;
+  }
+  .card:hover{ transform: translateY(-4px); box-shadow: 0 16px 34px rgba(44,27,18,0.2); }
+
+  .card-media{
+    position:relative;
+    aspect-ratio: 4/5;
+    background:
+      repeating-linear-gradient(45deg, rgba(201,162,39,0.10) 0 10px, rgba(201,162,39,0.04) 10px 20px),
+      linear-gradient(160deg, var(--cream-2), var(--cream));
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column; gap:8px;
+    color: var(--brown-soft);
+  }
+  .card-media .icon{ font-size: 40px; opacity:.6; }
+  .card-media .ph-text{ font-size: 12.5px; opacity:.75; text-align:center; padding:0 16px; }
+  .badge{
+    position:absolute; top:12px; left:12px;
+    background: var(--brown-deep); color: var(--gold-light);
+    font-size: 12px; font-weight:600; padding: 5px 12px; border-radius: 999px;
+    letter-spacing:.5px;
+  }
+  .badge.second{ background: var(--plum); color: var(--ivory); }
+  .badge.premium{
+    left:auto; right:12px; top:12px;
+    background: linear-gradient(135deg, var(--gold-light), var(--gold));
+    color: var(--brown-deep);
+  }
+  .card.highlight{ border:2px solid var(--gold); box-shadow: 0 14px 32px rgba(201,162,39,0.35); }
+  .chip.chip-premium{
+    background: linear-gradient(135deg, var(--gold-light), var(--gold));
+    color: var(--brown-deep); font-weight:600; border-color: var(--gold);
+  }
+  .chip.chip-premium.active{ background: var(--brown-deep); color: var(--gold-light); }
+  .tag-list li.tag-premium{
+    background: linear-gradient(135deg, var(--gold-light), var(--gold)); color: var(--brown-deep); font-weight:600;
+  }
+
+  .card-body{ padding: 18px 20px 20px; display:flex; flex-direction:column; gap:8px; flex:1; }
+  .card-body .code{ font-size:12px; color: var(--brown-soft); letter-spacing:1px; }
+  .card-body h3{ font-size: 18px; }
+  .card-body .type{ font-size: 13.5px; color: var(--brown-soft); }
+  .card-body .price{ font-family:'Noto Serif Thai',serif; font-weight:700; color: var(--brown-deep); font-size: 21px; margin-top:4px; }
+  .card-body .price small{ font-family:'Prompt',sans-serif; font-weight:400; font-size: 13px; color: var(--brown-soft); }
+  .card-foot{ padding: 0 20px 20px; display:flex; gap:10px; }
+
+  /* ---------- How to order ---------- */
+  .order-steps{
+    display:grid; grid-template-columns: repeat(3,1fr); gap: 26px; margin-bottom: 50px;
+  }
+  @media (max-width:900px){ .order-steps{ grid-template-columns: 1fr; } }
+  .step{
+    background: var(--ivory); border:1px solid var(--cream-2); border-radius: var(--radius);
+    padding: 30px 26px; text-align:center; box-shadow: var(--shadow);
+  }
+  .step .num{
+    width:48px; height:48px; border-radius:50%; margin:0 auto 16px;
+    background: linear-gradient(135deg, var(--gold-light), var(--gold));
+    color: var(--brown-deep); font-weight:700; font-size:20px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .step h3{ font-size:19px; margin-bottom:8px; }
+  .step p{ color: var(--brown-soft); font-size:15px; }
+
+  .pay-panel{
+    background: var(--brown-deep);
+    border-radius: 24px;
+    color: var(--ivory);
+    display:grid; grid-template-columns: 280px 1fr; gap: 40px; align-items:center;
+    padding: 40px;
+  }
+  @media (max-width:800px){ .pay-panel{ grid-template-columns:1fr; text-align:center; } }
+  .pay-panel .qr-box{ background:#fff; border-radius:18px; padding:14px; }
+  .pay-panel h3{ color: var(--gold-light); font-size:24px; margin-bottom:12px; }
+  .pay-panel ul{ margin-top:14px; }
+  .pay-panel li{ padding: 6px 0; color: rgba(255,250,240,0.9); font-size:15px; }
+  .pay-panel li b{ color: var(--gold-light); }
+
+  /* ---------- Category story blocks ---------- */
+  .story{
+    display:grid; grid-template-columns: 1fr 1fr; gap: 50px; align-items:center;
+  }
+  @media (max-width:900px){ .story{ grid-template-columns:1fr; } }
+  .story-logo{
+    background: var(--ivory); border-radius: 24px; padding: 30px;
+    box-shadow: var(--shadow); display:flex; align-items:center; justify-content:center;
+  }
+  .story-logo img{ max-height: 260px; }
+  .story h2{ font-size: 28px; margin-bottom: 14px; }
+  .story p{ color: var(--brown-soft); margin-bottom: 20px; }
+  .tag-list{ display:flex; flex-wrap:wrap; gap:10px; margin-bottom:24px; }
+  .tag-list li{ background: var(--cream-2); padding:7px 16px; border-radius:999px; font-size:13.5px; color:var(--brown); }
+
+  .bg-alt{ background: var(--ivory); }
+
+  /* ---------- Testimonial / social proof ---------- */
+  .proof-grid{ display:grid; grid-template-columns: repeat(3,1fr); gap: 24px; }
+  @media (max-width:900px){ .proof-grid{ grid-template-columns:1fr; } }
+  .proof-card{
+    background: var(--cream-2); border-radius: var(--radius); padding: 26px;
+  }
+  .proof-card .stars{ color: var(--gold); font-size:16px; margin-bottom:10px; letter-spacing:2px; }
+  .proof-card p{ font-size:15px; color: var(--brown); margin-bottom:14px; }
+  .proof-card .who{ font-size:13.5px; color: var(--brown-soft); font-weight:600; }
+
+  /* ---------- Footer ---------- */
+  footer{ background: var(--brown-deep); color: rgba(255,250,240,0.8); padding: 60px 0 30px; }
+  .footer-grid{ display:grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+  @media (max-width:900px){ .footer-grid{ grid-template-columns: 1fr 1fr; } }
+  @media (max-width:560px){ .footer-grid{ grid-template-columns: 1fr; } }
+  footer h4{ color: var(--gold-light); font-size:16px; margin-bottom:16px; }
+  footer .f-brand{ display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+  footer .f-brand img{ height:40px; }
+  footer .f-brand span{ font-family:'Noto Serif Thai',serif; font-weight:700; color: var(--ivory); font-size:17px; }
+  footer p{ font-size:14px; line-height:1.8; }
+  footer ul li{ margin-bottom:10px; font-size:14px; }
+  footer ul li a:hover{ color: var(--gold-light); }
+  .footer-bottom{
+    border-top: 1px solid rgba(255,250,240,0.15);
+    padding-top: 22px; text-align:center; font-size:13px; color: rgba(255,250,240,0.55);
+  }
+
+  /* ---------- Social proof toast ---------- */
+  .social-toast{
+    position: fixed; left: 20px; bottom: 20px; z-index: 190;
+    background: var(--ivory); border:1px solid var(--cream-2); border-radius: 14px;
+    box-shadow: 0 12px 30px rgba(44,27,18,0.25);
+    padding: 14px 18px; display:flex; align-items:center; gap:12px;
+    max-width: 320px;
+    transform: translateY(120%); opacity:0;
+    transition: transform .4s ease, opacity .4s ease;
+    pointer-events:none;
+  }
+  .social-toast.show{ transform: translateY(0); opacity:1; }
+  .social-toast .st-ic{
+    width:38px; height:38px; border-radius:50%; background: var(--cream-2); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:18px;
+  }
+  .social-toast .st-title{ font-size:13.5px; font-weight:600; color: var(--brown-deep); }
+  .social-toast .st-sub{ font-size:12px; color: var(--brown-soft); margin-top:2px; }
+  @media (max-width:560px){ .social-toast{ left:12px; right:12px; max-width:none; bottom:12px; } }
+
+  .reveal{ opacity:0; transform: translateY(16px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in{ opacity:1; transform:none; }
+</style>
 </head>
 <body>
-<div class="app">
-  <div id="sidebarMount"></div>
 
-  <div class="main">
-    <div class="topbar">
-      <div class="tb-left">
-        <button class="menu-toggle" id="menuToggleBtn" aria-label="เมนู">&#9776;</button>
-        <div>
-          <h1>แดชบอร์ดภาพรวม</h1>
-          <div class="breadcrumb">ระบบหลังบ้าน / แดชบอร์ด</div>
+<!-- ================= HEADER ================= -->
+<header>
+  <div class="nav-wrap">
+    <a class="brand" href="#top">
+      <img src="logo หลัก.png" alt="โลโก้บ้านผ้าคุณมารวย" />
+      <div class="brand-text">บ้านผ้าคุณมารวย<span>ผ้าไหมไทยแท้ · ชุดผ้าไทยตัดสำเร็จ</span></div>
+    </a>
+    <nav class="links" id="navLinks">
+      <a href="#new">สินค้าใหม่</a>
+      <a href="#secondhand">สินค้ามือสอง</a>
+      <a href="#catalog">แคตตาล็อกทั้งหมด</a>
+      <a href="#howto">วิธีสั่งซื้อ</a>
+      <a href="#contact">ติดต่อร้าน</a>
+      <a class="btn btn-line btn-sm nav-line-cta" href="#" id="navLineBtn">สั่งซื้อ/สอบถาม</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-line btn-sm btn-sm-desktop" href="#" id="topLineBtn">เพิ่มเพื่อน LINE</a>
+      <button class="hamburger" id="hamburgerBtn" aria-label="เมนู">&#9776;</button>
+    </div>
+  </div>
+</header>
+
+<!-- ================= HERO ================= -->
+<section class="hero" id="top">
+  <div class="container hero-grid">
+    <div>
+      <span class="eyebrow" style="color:var(--gold-light)">หัตถศิลป์ผ้าไหมไทย ตั้งแต่รุ่นสู่รุ่น</span>
+      <h1>ผ้าไหมไทยแท้ และชุดผ้าไทย<br><em>คัดสรรทุกผืนด้วยใจ</em></h1>
+      <p class="lead">บ้านผ้าคุณมารวย จำหน่ายผ้าไหมและชุดผ้าไทยตัดสำเร็จ ทั้งสินค้าใหม่มือ 1 และสินค้ามือสองชิ้นพิเศษหายาก สีสันสวยงามคมชัดตรงปก สั่งซื้อง่าย พูดคุยกับแม่ค้าได้โดยตรงผ่าน LINE</p>
+      <div class="hero-actions">
+        <a href="#new" class="btn btn-gold">ดูสินค้าใหม่ มือ 1</a>
+        <a href="#secondhand" class="btn btn-outline">ดูสินค้ามือสอง</a>
+      </div>
+      <div class="hero-badge-row">
+        <div class="hero-badge"><span class="dot"></span>ผ้าไหมแท้ คัดสรรคุณภาพ</div>
+        <div class="hero-badge"><span class="dot"></span>ชำระผ่าน PromptPay ปลอดภัย</div>
+        <div class="hero-badge"><span class="dot"></span>แชตสั่งซื้อได้ทันที ไม่ต้องกรอกฟอร์ม</div>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="hero-slider" id="heroSlider">
+        <div class="hero-slide active">
+          <img src="logo หลัก.png" alt="บ้านผ้าคุณมารวย" style="width:100%; max-width:340px; margin:0 auto;" />
         </div>
       </div>
-      <div class="tb-right">
-        <div class="admin-chip">
-          <div class="avatar">มร</div>
-          <div class="who">แอดมินร้าน</div>
-        </div>
+      <div class="hero-slider-dots" id="heroDots"></div>
+      <div class="hero-slide-label" id="heroSlideLabel"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= TRUST BAR ================= -->
+<section class="trust" style="padding:0;">
+  <div class="container trust-grid">
+    <div class="trust-item"><div class="ic">&#10022;</div><div><div class="tt">ผ้าไหมแท้คัดสรร</div><div class="ds">ทุกผืนตรวจสอบคุณภาพก่อนส่งมอบ</div></div></div>
+    <div class="trust-item"><div class="ic">&#128230;</div><div><div class="tt">จัดส่งทั่วประเทศ</div><div class="ds">แพ็กสินค้าอย่างดี ป้องกันรอยยับ</div></div></div>
+    <div class="trust-item"><div class="ic">&#128274;</div><div><div class="tt">ชำระเงินปลอดภัย</div><div class="ds">PromptPay QR ยืนยันยอดในแชต</div></div></div>
+    <div class="trust-item"><div class="ic">&#128172;</div><div><div class="tt">ปรึกษาได้ทุกขั้นตอน</div><div class="ds">แชตถามไซซ์ สี ลาย ก่อนตัดสินใจ</div></div></div>
+  </div>
+</section>
+
+<!-- ================= FLASH SALE (ตัวอย่าง — เชื่อมกับแท็บ promotions จริงภายหลัง) ================= -->
+<section class="flash-sale" id="flashSaleSection">
+  <div class="container flash-sale-inner">
+    <div class="flash-copy">
+      <span class="eyebrow" style="color:var(--gold-light)">&#9889; โปรโมชั่นวันนี้</span>
+      <h2 id="flashTitle">ลดสูงสุด 15% เฉพาะสมาชิก LINE วันนี้เท่านั้น</h2>
+      <p id="flashDesc">สั่งซื้อผ่านแชต LINE วันนี้ รับส่วนลดทันทีทั้งสินค้าใหม่และสินค้ามือสอง ก่อนราคากลับปกติ</p>
+      <a href="#" id="flashLineBtn" class="btn btn-gold">รับส่วนลดทาง LINE</a>
+    </div>
+    <div class="countdown" id="countdown">
+      <div class="cd-box"><span id="cdH">00</span><small>ชั่วโมง</small></div>
+      <div class="cd-sep">:</div>
+      <div class="cd-box"><span id="cdM">00</span><small>นาที</small></div>
+      <div class="cd-sep">:</div>
+      <div class="cd-box"><span id="cdS">00</span><small>วินาที</small></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CATALOG / PRODUCTS ================= -->
+<section id="catalog">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">แคตตาล็อกสินค้า</span>
+      <h2>เลือกชมผ้าไหมและชุดผ้าไทย</h2>
+      <div class="divider-orn">❖ ❖ ❖</div>
+      <p>กรองดูตามหมวดหมู่และประเภทสินค้า — ราคาและสต็อกอาจมีการเปลี่ยนแปลง กรุณาทักแชตสอบถามก่อนสั่งซื้อ</p>
+    </div>
+
+    <div class="cat-tabs">
+      <div class="cat-tab active" data-cat="all">ทั้งหมด</div>
+      <div class="cat-tab" data-cat="new">สินค้าใหม่ มือ 1</div>
+      <div class="cat-tab" data-cat="second">สินค้ามือสอง</div>
+    </div>
+
+    <div class="sub-filters" id="subFilters">
+      <div class="chip active" data-type="all">ทุกประเภท</div>
+      <!-- ชิปประเภทสินค้าที่เหลือสร้างอัตโนมัติจากแท็บ categories จริง (ดูสคริปต์ด้านล่าง) -->
+    </div>
+
+    <div class="product-grid" id="productGrid">
+      <p style="grid-column:1/-1; text-align:center; color:var(--brown-soft);">กำลังโหลดสินค้า...</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= STORY: NEW ================= -->
+<section class="bg-alt" id="new">
+  <div class="container story reveal">
+    <div class="story-logo"><img src="logo บ้านผ้าคุณมารวย.png" alt="บ้านผ้าคุณมารวย สินค้าใหม่" /></div>
+    <div>
+      <span class="eyebrow">หมวด A · สินค้าใหม่ มือ 1</span>
+      <h2>คอลเลกชันใหม่ ตัดเย็บประณีต</h2>
+      <p>ผ้าไหมและชุดผ้าไทยตัดสำเร็จมือ 1 ทุกชิ้นใหม่จากร้าน คัดลายและสีสันตามฤดูกาล เหมาะสำหรับใส่ในโอกาสพิเศษหรือสะสม เนื้อผ้าคงสีจริง ไม่ผ่านการบีบอัดภาพจากโซเชียล</p>
+      <ul class="tag-list">
+        <li class="tag-premium">&#9813; ผ้าไหมพรีเมี่ยม</li><li>ผ้าไหม</li><li>เสื้อ</li><li>ผ้าถุง/กระโปรง</li><li>กางเกง</li><li>เดรส</li><li>ผ้าไหมกรอบรูปที่ระลึก</li><li>ผ้าพันคอ/คลุมไหล่</li>
+      </ul>
+      <a href="#catalog" class="btn btn-gold" onclick="filterCategory('new')">ดูสินค้าใหม่ทั้งหมด</a>
+    </div>
+  </div>
+</section>
+
+<!-- ================= STORY: SECONDHAND ================= -->
+<section id="secondhand">
+  <div class="container story reveal">
+    <div>
+      <span class="eyebrow">หมวด B · ไหมใหม่ไม่ใหม่ (สินค้ามือ 2)</span>
+      <h2>ชิ้นพิเศษ หายาก มีชิ้นเดียว</h2>
+      <p>สินค้ามือสองส่วนใหญ่เป็นชิ้นเดียว (unique) ใครจองก่อนได้ก่อน แสดงสถานะแบบเรียลไทม์ &mdash; &ldquo;ว่าง&rdquo; / &ldquo;มีคนจอง&rdquo; / &ldquo;ขายแล้ว&rdquo; เพื่อลดปัญหาแย่งกันซื้อ หากสนใจแนะนำให้ทักแชตทันทีเพื่อจองสิทธิ์</p>
+      <ul class="tag-list">
+        <li>ผ้าไหม</li><li>เสื้อ</li><li>ผ้าถุง/กระโปรง</li><li>กางเกง</li><li>เดรส</li><li>ผ้าไหมกรอบรูปที่ระลึก</li><li>ผ้าพันคอ/คลุมไหล่</li>
+      </ul>
+      <a href="#catalog" class="btn btn-gold" onclick="filterCategory('second')">ดูสินค้ามือสองทั้งหมด</a>
+    </div>
+    <div class="story-logo"><img src="logo ไหมใหม่ไม่ใหม่.png" alt="ไหมใหม่ไม่ใหม่ by คุณมารวย" /></div>
+  </div>
+</section>
+
+<!-- ================= HOW TO ORDER ================= -->
+<section class="bg-alt" id="howto">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">ขั้นตอนง่าย ๆ</span>
+      <h2>วิธีสั่งซื้อและชำระเงิน</h2>
+      <div class="divider-orn">❖ ❖ ❖</div>
+      <p>ออกแบบมาให้สั่งซื้อง่ายที่สุด แตะไม่กี่ครั้งก็จบ เหมาะกับทุกวัย</p>
+    </div>
+
+    <div class="order-steps reveal">
+      <div class="step">
+        <div class="num">1</div>
+        <h3>เลือกสินค้าที่ถูกใจ</h3>
+        <p>กดปุ่ม &ldquo;สั่งซื้อ/สอบถาม&rdquo; ที่การ์ดสินค้า ระบบจะเปิดแชต LINE พร้อมรหัสสินค้าให้อัตโนมัติ</p>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <h3>ยืนยันกับแม่ค้าในแชต</h3>
+        <p>แจ้งที่อยู่จัดส่งและยืนยันสินค้า แม่ค้าจะแจ้งยอดชำระและช่วยดูแลทุกขั้นตอน</p>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <h3>สแกนจ่ายผ่าน PromptPay</h3>
+        <p>สแกน QR โอนเงิน แล้วส่งสลิปในแชต แม่ค้ายืนยันยอดและจัดส่งสินค้าทันที</p>
       </div>
     </div>
 
-    <div class="content">
-      <div class="draft-banner">
-        <span class="ic">&#128274;</span>
-        <div>เชื่อมต่อกับ Google Sheets จริงผ่าน Apps Script Web App แล้ว (มีระบบล็อกอินแอดมิน) — หากข้อมูลไม่ขึ้น ให้ตรวจสอบ <code>config.js</code> และการ Deploy ตามคู่มือติดตั้ง</div>
-      </div>
-
-      <div class="kpi-grid" id="kpiGrid"></div>
-
-      <div class="two-col">
-        <div class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>ยอดขาย 7 วันล่าสุด</h2>
-              <div class="sub">ข้อมูลตัวอย่าง — เชื่อมกับแท็บ orders จริงภายหลัง</div>
-            </div>
-          </div>
-          <div class="bar-chart" id="salesChart"></div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>งานด่วน</h2>
-              <div class="sub">ทางลัดไปยังงานที่ทำบ่อย</div>
-            </div>
-          </div>
-          <div class="stack">
-            <a class="btn btn-gold" href="products.html?new=1">&#10133; เพิ่มสินค้าใหม่</a>
-            <a class="btn btn-outline" href="promotions.html?new=1">&#127991;&#65039; สร้างโปรโมชั่นใหม่</a>
-            <a class="btn btn-outline" href="orders.html">&#128230; ดูคำสั่งซื้อทั้งหมด</a>
-            <a class="btn btn-outline" href="categories.html?new=1">&#128194; เพิ่มหมวดหมู่สินค้า</a>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <div>
-            <h2>คำสั่งซื้อล่าสุด</h2>
-            <div class="sub">5 รายการล่าสุด</div>
-          </div>
-          <a class="btn btn-outline btn-sm" href="orders.html">ดูทั้งหมด</a>
-        </div>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>รหัสออเดอร์</th>
-                <th>ลูกค้า</th>
-                <th>สินค้า</th>
-                <th>ยอด</th>
-                <th>สถานะ</th>
-                <th>วันที่</th>
-              </tr>
-            </thead>
-            <tbody id="recentOrdersBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <div>
-            <h2>สินค้าใกล้หมด / หมดสต็อก</h2>
-            <div class="sub">เหลือ 1 ชิ้นหรือน้อยกว่า — ควรเติมสต็อกหรือปิดการขาย</div>
-          </div>
-          <a class="btn btn-outline btn-sm" href="products.html">จัดการสินค้า</a>
-        </div>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>รหัสสินค้า</th>
-                <th>ชื่อสินค้า</th>
-                <th>หมวด</th>
-                <th>คงเหลือ</th>
-                <th>สถานะ</th>
-              </tr>
-            </thead>
-            <tbody id="lowStockBody"></tbody>
-          </table>
+    <div class="pay-panel reveal">
+      <div class="qr-box"><img src="promptpay_qr.png" alt="PromptPay QR บ้านผ้าคุณมารวย" /></div>
+      <div>
+        <h3>ชำระผ่าน PromptPay</h3>
+        <p style="color:rgba(255,250,240,0.85)">สแกน QR เพื่อโอนเข้าบัญชีร้านโดยตรง รับเงินได้จากทุกธนาคาร ปลอดภัย ตรวจสอบได้</p>
+        <ul>
+          <li><b>ชื่อบัญชี:</b> บ้านผ้าคุณมารวย โดย น.ส. ศุภินันท์ ศรีภูธร</li>
+          <li><b>ธนาคาร:</b> กสิกรไทย (KBank)</li>
+          <li><b>บัญชี:</b> 054-1-85806-7</li>
+        </ul>
+        <div style="margin-top:22px; display:flex; gap:14px; flex-wrap:wrap;">
+          <a href="#" id="payLineBtn" class="btn btn-line">แชตสั่งซื้อทาง LINE</a>
+          <a href="tel:0850054666" class="btn btn-outline">โทร 085-005-4666</a>
         </div>
       </div>
     </div>
   </div>
-</div>
+</section>
 
-<script src="assets/admin-data.js"></script>
-<script src="assets/admin.js"></script>
-<script src="../config.js"></script>
-<script src="assets/api.js"></script>
-<script>
-requireLogin();
-renderSidebar('dashboard');
-
-(async function init(){
-  try { await loadAdminData(); } catch(err){ showApiError(err); return; }
-
-  // ---------------- KPI cards ----------------
-  const todaySales = ADMIN_SALES_7D[ADMIN_SALES_7D.length - 1].value;
-  const pendingOrders = ADMIN_ORDERS.filter(o => o.status === "รอชำระเงิน" || o.status === "ชำระแล้ว").length;
-  const lowStock = ADMIN_PRODUCTS.filter(p => p.stock <= 1 && p.status !== "ขายแล้ว");
-  const activeProducts = ADMIN_PRODUCTS.filter(p => p.status !== "ขายแล้ว").length;
-
-  const kpis = [
-    { label:"ยอดขายวันนี้", value: formatBaht(todaySales), icon:"&#128176;", bg:"var(--ok-bg)", color:"var(--ok)", trend:"เทียบเมื่อวาน +18%", trendClass:"up" },
-    { label:"ออเดอร์รอดำเนินการ", value: pendingOrders + " รายการ", icon:"&#128230;", bg:"var(--warn-bg)", color:"var(--warn)", trend:"ต้องติดตาม", trendClass:"" },
-    { label:"สินค้าใกล้หมด/หมดสต็อก", value: lowStock.length + " รายการ", icon:"&#9888;&#65039;", bg:"var(--danger-bg)", color:"var(--danger)", trend:"ควรเติมสต็อก", trendClass:"down" },
-    { label:"สินค้าที่เปิดขายทั้งหมด", value: activeProducts + " รายการ", icon:"&#129525;", bg:"var(--info-bg)", color:"var(--info)", trend:"ทุกหมวดรวมกัน", trendClass:"" },
-  ];
-  document.getElementById('kpiGrid').innerHTML = kpis.map(k => `
-    <div class="kpi-card">
-      <div class="kpi-ic" style="background:${k.bg}; color:${k.color};">${k.icon}</div>
-      <div>
-        <div class="kpi-label">${k.label}</div>
-        <div class="kpi-value">${k.value}</div>
-        <div class="kpi-trend ${k.trendClass}">${k.trend}</div>
+<!-- ================= SOCIAL PROOF ================= -->
+<section>
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">ลูกค้าบอกต่อ</span>
+      <h2>ความประทับใจจากลูกค้า</h2>
+      <div class="divider-orn">❖ ❖ ❖</div>
+    </div>
+    <div class="proof-grid reveal">
+      <div class="proof-card">
+        <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+        <p>&ldquo;สีผ้าตรงปกมาก เนื้อไหมนุ่มสวยกว่าที่คิด แพ็กมาดีไม่มีรอยยับเลยค่ะ&rdquo;</p>
+        <div class="who">— ลูกค้าประจำ, กรุงเทพฯ</div>
+      </div>
+      <div class="proof-card">
+        <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+        <p>&ldquo;สั่งผ่านไลน์ง่ายมาก แม่ค้าใจดีให้คำแนะนำเรื่องไซซ์ตลอด ได้ชุดสวยทันงาน&rdquo;</p>
+        <div class="who">— ลูกค้าสินค้าใหม่มือ 1</div>
+      </div>
+      <div class="proof-card">
+        <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+        <p>&ldquo;ได้ผ้าไหมมือสองลายหายากที่ตามหามานาน คุ้มค่ามากค่ะ&rdquo;</p>
+        <div class="who">— ลูกค้าไหมใหม่ไม่ใหม่</div>
       </div>
     </div>
-  `).join('');
+  </div>
+</section>
 
-  // ---------------- Bar chart ยอดขาย 7 วัน ----------------
-  const maxVal = Math.max(...ADMIN_SALES_7D.map(d => d.value));
-  document.getElementById('salesChart').innerHTML = ADMIN_SALES_7D.map(d => `
-    <div class="bar-col">
-      <div class="bar-val">${formatNumber(d.value)}</div>
-      <div class="bar" style="height:${Math.max(8, Math.round((d.value / maxVal) * 120))}px;"></div>
-      <div class="bar-day">${d.day}</div>
+<!-- ================= FOOTER / CONTACT ================= -->
+<footer id="contact">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <div class="f-brand"><img src="logo หลัก.png" alt="โลโก้" /><span>บ้านผ้าคุณมารวย</span></div>
+        <p>ผ้าไหมไทยแท้ และชุดผ้าไทยตัดสำเร็จ จำหน่ายสินค้าใหม่มือ 1 ผ่านเพจ &ldquo;บ้านผ้าคุณมารวย&rdquo; และสินค้ามือสองผ่านเพจ &ldquo;ไหมใหม่ไม่ใหม่ by คุณมารวย&rdquo;</p>
+      </div>
+      <div>
+        <h4>หมวดสินค้า</h4>
+        <ul>
+          <li><a href="#new">สินค้าใหม่ มือ 1</a></li>
+          <li><a href="#secondhand">สินค้ามือสอง</a></li>
+          <li><a href="#catalog">แคตตาล็อกทั้งหมด</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>ช่วยเหลือ</h4>
+        <ul>
+          <li><a href="#howto">วิธีสั่งซื้อ/ชำระเงิน</a></li>
+          <li><a href="#" id="footLineBtn">แชต LINE</a></li>
+          <li><a href="tel:0850054666">โทร 085-005-4666</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>ติดตามเรา</h4>
+        <ul>
+          <li><a href="https://www.facebook.com/banphakhunmaruay" target="_blank" rel="noopener">เพจ Facebook: บ้านผ้าคุณมารวย</a></li>
+          <li><a href="https://www.facebook.com/maimaimaimaibykhunmaruay" target="_blank" rel="noopener">เพจ Facebook: ไหมใหม่ไม่ใหม่ by คุณมารวย</a></li>
+          <li><a href="#" id="footLineBtn2">LINE Official Account (@banphakhunmaruay)</a></li>
+        </ul>
+      </div>
     </div>
-  `).join('');
+    <div class="footer-bottom">
+      &copy; <span id="year"></span> บ้านผ้าคุณมารวย — สงวนลิขสิทธิ์ · เอกสารฉบับร่างสำหรับตรวจทาน
+    </div>
+  </div>
+</footer>
 
-  // ---------------- คำสั่งซื้อล่าสุด ----------------
-  const recent = ADMIN_ORDERS.slice(0, 5);
-  document.getElementById('recentOrdersBody').innerHTML = recent.map(o => `
-    <tr>
-      <td class="cell-strong">${escapeHtml(o.orderId)}</td>
-      <td>${escapeHtml(o.customer)}<div class="cell-muted">${escapeHtml(o.lineUser)}</div></td>
-      <td>${escapeHtml(o.productName)}</td>
-      <td>${formatBaht(o.amount)}</td>
-      <td>${badgeHtml(o.status, ORDER_STATUS_BADGE[o.status] || 'badge-gray')}</td>
-      <td class="cell-muted">${escapeHtml(o.date)}</td>
-    </tr>
-  `).join('');
+<!-- Social proof toast (ตัวอย่าง — ภายหลังเชื่อมกับข้อมูลจริงจาก orders/products) -->
+<div class="social-toast" id="socialToast">
+  <div class="st-ic" id="stIcon">&#128230;</div>
+  <div>
+    <div class="st-title" id="stTitle"></div>
+    <div class="st-sub" id="stSub"></div>
+  </div>
+</div>
 
-  // ---------------- สินค้าใกล้หมด ----------------
-  if(lowStock.length === 0){
-    document.getElementById('lowStockBody').innerHTML = `<tr class="empty-row"><td colspan="5">ไม่มีสินค้าใกล้หมดในขณะนี้</td></tr>`;
-  } else {
-    document.getElementById('lowStockBody').innerHTML = lowStock.map(p => `
-      <tr>
-        <td class="cell-strong">${escapeHtml(p.code)}</td>
-        <td>${escapeHtml(p.name)}</td>
-        <td>${p.mainCat === 'new' ? 'สินค้าใหม่ มือ 1' : 'สินค้ามือสอง'} · ${escapeHtml(p.type)}</td>
-        <td>${p.stock} ชิ้น</td>
-        <td>${badgeHtml(p.status, PRODUCT_STATUS_BADGE[p.status] || 'badge-gray')}</td>
-      </tr>
-    `).join('');
+<script src="config.js"></script>
+<script>
+  // ================= CONFIG (แก้ก่อนใช้งานจริง) =================
+  const LINE_OA_ID = "@banphakhunmaruay"; // LINE OA ID จริงของร้าน
+  const SHOP_LINE_LINK = `https://line.me/R/ti/p/${encodeURIComponent(LINE_OA_ID)}`;
+
+  document.getElementById('year').textContent = new Date().getFullYear() + 543;
+
+  // ผูกลิงก์ LINE ทั่วไป (เพิ่มเพื่อน)
+  ['navLineBtn','topLineBtn','payLineBtn','footLineBtn','footLineBtn2','flashLineBtn'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el){ el.href = SHOP_LINE_LINK; el.target = "_blank"; el.rel = "noopener"; }
+  });
+
+  // เมนูมือถือ
+  const hamburgerBtn = document.getElementById('hamburgerBtn');
+  const navLinks = document.getElementById('navLinks');
+  hamburgerBtn.addEventListener('click', ()=> navLinks.classList.toggle('open'));
+  navLinks.querySelectorAll('a').forEach(a=> a.addEventListener('click', ()=> navLinks.classList.remove('open')));
+
+  // ================= ข้อมูลสินค้า/หมวดหมู่/โปรโมชั่น — ดึงจาก Google Sheets จริงผ่าน Apps Script =================
+  // ไอคอน/หน่วยแสดงผลต่อ "ประเภทสินค้า" (ไม่มีในสคีมา backend เพราะเป็นเรื่องดีไซน์ล้วน)
+  const TYPE_META = {
+    "ผ้าไหมพรีเมี่ยม": { icon:"&#128081;", unit:"ต่อผืน" },
+    "ผ้าไหม": { icon:"&#129513;", unit:"ต่อผืน" },
+    "เสื้อ": { icon:"&#128085;", unit:"ต่อตัว" },
+    "ผ้าถุง/กระโปรง": { icon:"&#129514;", unit:"ต่อผืน" },
+    "กางเกง": { icon:"&#128086;", unit:"ต่อตัว" },
+    "เดรส": { icon:"&#128092;", unit:"ต่อชุด" },
+    "ผ้าไหมกรอบรูปที่ระลึก": { icon:"&#128444;&#65039;", unit:"ต่อกรอบ" },
+    "ผ้าพันคอ/คลุมไหล่": { icon:"&#129521;", unit:"ต่อผืน" },
+  };
+  const STOCK_BADGE = {
+    "มีคนจอง": { text:"มีคนจอง", cls:"second" },
+    "ของหมด": { text:"สินค้าหมด", cls:"second" },
+  };
+
+  let PRODUCTS = [];
+  let CATEGORIES = [];
+  let PROMOTIONS = [];
+
+  function escapeHtml(value){
+    return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    }[ch]));
   }
-})();
+
+  function safeAttr(value){
+    return escapeHtml(value);
+  }
+
+  function mapProductForCard(p){
+    const meta = TYPE_META[p.type] || { icon:"&#129525;", unit:"ต่อชิ้น" };
+    return {
+      code: p.code, name: p.name, cat: p.mainCat, type: p.type,
+      price: Number(p.price).toLocaleString('th-TH'),
+      unit: meta.unit + (p.mainCat === 'second' ? ' · ชิ้นเดียว' : ''),
+      icon: meta.icon, highlight: !!p.highlight, status: p.status,
+    };
+  }
+
+  const grid = document.getElementById('productGrid');
+  let currentCat = "all";
+  let currentType = "all";
+
+  function renderChips(){
+    const wrap = document.getElementById('subFilters');
+    const openCats = CATEGORIES.slice().sort((a,b)=> a.order - b.order);
+    const chipsHtml = openCats.map(c => `
+      <div class="chip${c.highlight ? ' chip-premium' : ''}" data-type="${safeAttr(c.name)}">${c.highlight ? '&#9813; ' : ''}${escapeHtml(c.name)}</div>
+    `).join('');
+    wrap.innerHTML = `<div class="chip active" data-type="all">ทุกประเภท</div>` + chipsHtml;
+
+    wrap.querySelectorAll('.chip').forEach(chip=>{
+      chip.addEventListener('click', ()=>{
+        currentType = chip.dataset.type;
+        wrap.querySelectorAll('.chip').forEach(c=> c.classList.toggle('active', c === chip));
+        renderProducts();
+      });
+    });
+  }
+
+  function renderProducts(){
+    grid.innerHTML = "";
+    const filtered = PRODUCTS
+      .filter(p => p.status !== 'ขายแล้ว')
+      .map(mapProductForCard)
+      .filter(p=>{
+        const catOk = currentCat === "all" || p.cat === currentCat;
+        const typeOk = currentType === "all" || p.type === currentType;
+        return catOk && typeOk;
+      });
+
+    // ปักหมุดสินค้าไฮไลท์ (เช่น ผ้าไหมพรีเมี่ยม) ไว้บนสุดเสมอ ตามส่วนที่ 9.2.1 ของเอกสาร
+    filtered.sort((a,b)=> (b.highlight?1:0) - (a.highlight?1:0));
+
+    if(filtered.length === 0){
+      grid.innerHTML = `<p style="grid-column:1/-1; text-align:center; color:var(--brown-soft);">ยังไม่มีสินค้าในหมวดนี้ในขณะนี้ ลองเลือกหมวดอื่น หรือทักแชตสอบถามสินค้าที่สนใจได้เลยค่ะ</p>`;
+      return;
+    }
+
+    filtered.forEach(p=>{
+      const badgeText = p.cat === "new" ? "สินค้าใหม่ มือ 1" : "สินค้ามือสอง";
+      const badgeClass = p.cat === "new" ? "" : "second";
+      const stockBadge = STOCK_BADGE[p.status];
+      const orderMsg = `สนใจสั่งซื้อสินค้า รหัส ${p.code} (${p.name}) ค่ะ/ครับ`;
+      const orderLink = `https://line.me/R/oaMessage/${encodeURIComponent(LINE_OA_ID)}/?${encodeURIComponent(orderMsg)}`;
+      const canOrder = p.status === 'คงเหลือ';
+
+      const card = document.createElement('div');
+      card.className = "card" + (p.highlight ? " highlight" : "");
+      card.innerHTML = `
+        <div class="card-media">
+          <span class="badge ${badgeClass}">${badgeText}</span>
+          ${p.highlight ? `<span class="badge premium">&#9813; พรีเมี่ยม</span>` : ""}
+          ${stockBadge ? `<span class="badge ${stockBadge.cls}">${stockBadge.text}</span>` : ""}
+          <div class="icon">${p.icon}</div>
+          <div class="ph-text">ภาพสินค้าจริงจะแสดงที่นี่<br>(รอเชื่อมคลังภาพ)</div>
+        </div>
+        <div class="card-body">
+          <div class="code">รหัสสินค้า: ${escapeHtml(p.code)}</div>
+          <h3>${escapeHtml(p.name)}</h3>
+          <div class="type">${escapeHtml(p.type)}</div>
+          <div class="price">${p.price} <small>บาท ${p.unit}</small></div>
+        </div>
+        <div class="card-foot">
+          ${canOrder
+            ? `<a class="btn btn-line btn-sm btn-block" href="${safeAttr(orderLink)}" target="_blank" rel="noopener">สั่งซื้อ/สอบถาม</a>`
+            : `<a class="btn btn-outline btn-sm btn-block" href="${safeAttr(SHOP_LINE_LINK)}" target="_blank" rel="noopener">สอบถามสินค้าใกล้เคียง</a>`}
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  function filterCategory(cat){
+    currentCat = cat;
+    document.querySelectorAll('.cat-tab').forEach(t=> t.classList.toggle('active', t.dataset.cat === cat));
+    renderProducts();
+    document.getElementById('catalog').scrollIntoView({behavior:'smooth'});
+  }
+
+  document.querySelectorAll('.cat-tab').forEach(tab=>{
+    tab.addEventListener('click', ()=> filterCategory(tab.dataset.cat));
+  });
+
+  // ================= Hero: สไลด์สินค้าแนะนำอัตโนมัติ =================
+  function heroSlider(){
+    const slider = document.getElementById('heroSlider');
+    const dotsWrap = document.getElementById('heroDots');
+    const label = document.getElementById('heroSlideLabel');
+    slider.innerHTML = ""; dotsWrap.innerHTML = "";
+    const featured = PRODUCTS.filter(p=>p.status!=='ขายแล้ว').map(mapProductForCard).slice(0, 4);
+    if(featured.length === 0) return;
+
+    featured.forEach((p, i)=>{
+      const slide = document.createElement('div');
+      slide.className = 'hero-slide' + (i === 0 ? ' active' : '');
+      const badgeText = p.cat === 'new' ? 'สินค้าใหม่ มือ 1' : 'สินค้ามือสอง';
+      slide.innerHTML = `
+        <div class="feat-card">
+          <div class="feat-icon">${p.icon}</div>
+          <span class="feat-badge">${badgeText}</span>
+          <div class="feat-name">${escapeHtml(p.name)}</div>
+          <div class="feat-price">${p.price} บาท</div>
+        </div>`;
+      slider.appendChild(slide);
+
+      const dot = document.createElement('div');
+      dot.className = 'hdot' + (i === 0 ? ' active' : '');
+      dot.addEventListener('click', ()=> showSlide(i));
+      dotsWrap.appendChild(dot);
+    });
+
+    const slides = slider.querySelectorAll('.hero-slide');
+    const dots = dotsWrap.querySelectorAll('.hdot');
+    let idx = 0;
+    let timer;
+
+    function showSlide(i){
+      slides[idx].classList.remove('active');
+      dots[idx].classList.remove('active');
+      idx = (i + slides.length) % slides.length;
+      slides[idx].classList.add('active');
+      dots[idx].classList.add('active');
+      label.textContent = idx === 0 ? 'บ้านผ้าคุณมารวย' : 'สินค้าแนะนำประจำสัปดาห์';
+      resetTimer();
+    }
+    function resetTimer(){
+      clearInterval(timer);
+      timer = setInterval(()=> showSlide(idx + 1), 4200);
+    }
+    label.textContent = 'บ้านผ้าคุณมารวย';
+    resetTimer();
+    slider.parentElement.addEventListener('mouseenter', ()=> clearInterval(timer));
+    slider.parentElement.addEventListener('mouseleave', resetTimer);
+  }
+
+  // ================= Flash Sale: ใช้โปรโมชั่นจริงจากแท็บ promotions (แบบวันเดียว start === end) =================
+  function setupFlashSale(){
+    const section = document.getElementById('flashSaleSection');
+    const flash = PROMOTIONS.find(p => p.start === p.end);
+    if(!flash){ if(section) section.style.display = 'none'; return; }
+
+    document.getElementById('flashTitle').textContent = `${flash.name} — ลด ${flash.discount}`;
+    document.getElementById('flashDesc').textContent = flash.condition || 'สั่งซื้อผ่านแชต LINE วันนี้ก่อนราคากลับปกติ';
+
+    const elH = document.getElementById('cdH');
+    const elM = document.getElementById('cdM');
+    const elS = document.getElementById('cdS');
+    if(!elH) return;
+    const target = new Date();
+    target.setHours(23,59,59,0);
+
+    function tick(){
+      const diff = Math.max(0, target - Date.now());
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      elH.textContent = String(h).padStart(2,'0');
+      elM.textContent = String(m).padStart(2,'0');
+      elS.textContent = String(s).padStart(2,'0');
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  // ================= Social Proof: ป๊อปอัปแจ้งเตือนแบบสุ่มจากสินค้าจริง =================
+  function socialProof(){
+    const toast = document.getElementById('socialToast');
+    const icon = document.getElementById('stIcon');
+    const title = document.getElementById('stTitle');
+    const sub = document.getElementById('stSub');
+    if(!toast || PRODUCTS.length === 0) return;
+
+    function randomMessage(){
+      const p = mapProductForCard(PRODUCTS[Math.floor(Math.random() * PRODUCTS.length)]);
+      const minsAgo = Math.floor(Math.random() * 12) + 1;
+      const viewers = Math.floor(Math.random() * 7) + 2;
+      const templates = [
+        { ic: '&#128230;', title: `เพิ่งสั่งซื้อ &ldquo;${escapeHtml(p.name)}&rdquo;`, sub: `${minsAgo} นาทีที่แล้ว · รหัส ${p.code}` },
+        { ic: '&#128064;', title: `มีคนกำลังดูสินค้านี้อยู่ ${viewers} คน`, sub: p.name },
+        { ic: '&#10071;', title: escapeHtml(p.name), sub: p.cat === 'second' ? 'เหลือชิ้นเดียว รีบจองก่อนหมด' : 'ใกล้หมดสต็อกแล้ว' },
+      ];
+      return templates[Math.floor(Math.random() * templates.length)];
+    }
+
+    function showToast(){
+      const msg = randomMessage();
+      icon.innerHTML = msg.ic;
+      title.innerHTML = msg.title;
+      sub.textContent = msg.sub;
+      toast.classList.add('show');
+      setTimeout(()=> toast.classList.remove('show'), 4800);
+    }
+
+    setTimeout(showToast, 3500);
+    setInterval(showToast, 9000);
+  }
+
+  // ================= โหลดข้อมูลจริงจาก Apps Script Web App แล้วค่อยเรนเดอร์ทุกส่วน =================
+  (async function initStorefront(){
+    try {
+      if(typeof API_BASE_URL === 'undefined' || API_BASE_URL.indexOf('REPLACE_WITH') !== -1){
+        throw new Error('ยังไม่ได้ตั้งค่า API_BASE_URL ใน config.js');
+      }
+      const res = await fetch(API_BASE_URL, { method:'POST', body: JSON.stringify({ action:'storefront.get' }) });
+      const json = await res.json();
+      if(!json.ok) throw new Error(json.message || json.error);
+      PRODUCTS = json.data.products || [];
+      CATEGORIES = json.data.categories || [];
+      PROMOTIONS = json.data.promotions || [];
+    } catch(err){
+      console.error('โหลดข้อมูลร้านค้าไม่สำเร็จ:', err);
+      grid.innerHTML = `<p style="grid-column:1/-1; text-align:center; color:var(--brown-soft);">ไม่สามารถโหลดสินค้าได้ในขณะนี้ กรุณาทักแชต LINE เพื่อสอบถามสินค้าโดยตรง หรือลองรีเฟรชหน้าอีกครั้ง</p>`;
+      document.getElementById('flashSaleSection').style.display = 'none';
+      return;
+    }
+
+    renderChips();
+    renderProducts();
+    heroSlider();
+    setupFlashSale();
+    socialProof();
+  })();
+
+  // Scroll reveal
+  const revealEls = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  revealEls.forEach(el=> io.observe(el));
 </script>
+
 </body>
 </html>
