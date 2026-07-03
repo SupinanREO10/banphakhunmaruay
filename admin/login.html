@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>เข้าสู่ระบบ | ระบบหลังบ้าน บ้านผ้าคุณมารวย</title>
+
+<!--
+  ==========================================================================
+  หน้าล็อกอินแอดมิน — เชื่อม action auth.login ของ Google Apps Script Web App
+  ต้องตั้งค่าบัญชีแอดมินก่อน (รัน setAdminPassword() ใน gas/Setup.gs หนึ่งครั้ง)
+  และตั้ง API_BASE_URL ใน config.js ให้ถูกต้อง (ดูคู่มือติดตั้ง)
+  ==========================================================================
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/admin.css">
+<style>
+  .login-wrap{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background: linear-gradient(160deg, var(--brown-deep), var(--brown));
+    padding:20px;
+  }
+  .login-card{
+    width:100%; max-width:400px; background:var(--panel); border-radius:var(--radius);
+    box-shadow: var(--shadow); padding:34px 30px;
+  }
+  .login-card .brand{ display:flex; flex-direction:column; align-items:center; gap:10px; margin-bottom:22px; }
+  .login-card .brand img{ width:64px; height:64px; object-fit:contain; }
+  .login-card h1{ font-size:20px; text-align:center; }
+  .login-card .sub{ text-align:center; color:var(--muted); font-size:13px; margin-bottom:20px; }
+  .login-card .form-field{ margin-bottom:16px; }
+  .login-card label{ display:block; font-size:13px; font-weight:600; color:var(--brown-deep); margin-bottom:6px; }
+  .login-card input{
+    width:100%; padding:11px 13px; border:1px solid var(--border); border-radius:10px; font-family:inherit; font-size:14px;
+  }
+  .login-card .btn{ width:100%; justify-content:center; margin-top:6px; }
+  .login-error{
+    background:var(--danger-bg); color:var(--danger); border-radius:10px; padding:10px 13px;
+    font-size:13px; margin-bottom:16px; display:none;
+  }
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <form class="login-card" id="loginForm">
+    <div class="brand">
+      <img src="../logo หลัก.png" alt="โลโก้" />
+      <h1>ระบบหลังบ้าน บ้านผ้าคุณมารวย</h1>
+    </div>
+    <div class="sub">เข้าสู่ระบบด้วยบัญชีแอดมินร้าน</div>
+
+    <div class="login-error" id="loginError"></div>
+
+    <div class="form-field">
+      <label>ชื่อผู้ใช้</label>
+      <input type="text" id="username" autocomplete="username" required />
+    </div>
+    <div class="form-field">
+      <label>รหัสผ่าน</label>
+      <input type="password" id="password" autocomplete="current-password" required />
+    </div>
+    <button type="submit" class="btn btn-gold" id="btnLogin">เข้าสู่ระบบ</button>
+  </form>
+</div>
+
+<script src="../config.js"></script>
+<script src="assets/api.js"></script>
+<script>
+  // ถ้าล็อกอินอยู่แล้ว ให้ข้ามไปหน้าแดชบอร์ดเลย
+  if (getAdminToken()) { location.href = 'index.html'; }
+
+  document.getElementById('loginForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const errEl = document.getElementById('loginError');
+    errEl.style.display = 'none';
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const btn = document.getElementById('btnLogin');
+    btn.disabled = true;
+    btn.textContent = 'กำลังเข้าสู่ระบบ...';
+    try {
+      const data = await apiPublic('auth.login', { username, password });
+      setAdminToken(data.token);
+      location.href = 'index.html';
+    } catch (err) {
+      errEl.textContent = err.message || 'เข้าสู่ระบบไม่สำเร็จ';
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'เข้าสู่ระบบ';
+    }
+  });
+</script>
+</body>
+</html>

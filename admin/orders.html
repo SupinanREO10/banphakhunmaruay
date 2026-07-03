@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>คำสั่งซื้อ | ระบบหลังบ้าน บ้านผ้าคุณมารวย</title>
+
+<!--
+  ==========================================================================
+  ร่างระบบหลังบ้าน — หน้าจัดการคำสั่งซื้อ (ตรงกับแท็บ orders + เอกสารส่วนที่ 10.7)
+  เมื่อแอดมินกรอกเลขพัสดุ ระบบจะ (จำลอง) ส่งข้อความแจ้งลูกค้าทาง LINE อัตโนมัติ
+  พร้อมลิงก์ติดตามพัสดุ และภายหลังส่งข้อความขอรีวิวเมื่อของถึงแล้ว
+  TODO ก่อนใช้งานจริง: เชื่อมกับแท็บ orders ใน Google Sheet + LINE Messaging API
+  ==========================================================================
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/admin.css">
+</head>
+<body>
+<div class="app">
+  <div id="sidebarMount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="tb-left">
+        <button class="menu-toggle" id="menuToggleBtn" aria-label="เมนู">&#9776;</button>
+        <div>
+          <h1>คำสั่งซื้อ</h1>
+          <div class="breadcrumb">ระบบหลังบ้าน / คำสั่งซื้อ</div>
+        </div>
+      </div>
+      <div class="tb-right">
+        <div class="admin-chip"><div class="avatar">มร</div><div class="who">แอดมินร้าน</div></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="draft-banner">
+        <span class="ic">&#128274;</span>
+        <div>การอัปเดตสถานะ/เลขพัสดุบันทึกลงแท็บ <code>orders</code> จริงแล้ว — การแจ้งเตือนลูกค้าทาง LINE ยังเป็นการ<strong>บันทึกข้อความจำลอง</strong>ไว้ในแท็บ <code>notification_log</code> เท่านั้น (ยังไม่ส่งจริงผ่าน LINE Messaging API — ดูคู่มือติดตั้งสำหรับขั้นตอนต่อยอด)</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>รายการคำสั่งซื้อทั้งหมด</h2>
+            <div class="sub"><span id="orderCount"></span></div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="search-box">
+            <span>&#128269;</span>
+            <input type="text" id="searchInput" placeholder="ค้นหารหัสออเดอร์ ชื่อลูกค้า หรือสินค้า..." />
+          </div>
+          <div class="tab-filter" id="statusTabs">
+            <div class="tf-item active" data-status="all">ทั้งหมด</div>
+            <div class="tf-item" data-status="รอชำระเงิน">รอชำระเงิน</div>
+            <div class="tf-item" data-status="ชำระแล้ว">ชำระแล้ว</div>
+            <div class="tf-item" data-status="จัดส่งแล้ว">จัดส่งแล้ว</div>
+            <div class="tf-item" data-status="ยกเลิก">ยกเลิก</div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>รหัสออเดอร์</th>
+                <th>ลูกค้า</th>
+                <th>สินค้า</th>
+                <th>ยอด</th>
+                <th>สถานะ</th>
+                <th>เลขพัสดุ</th>
+                <th>วันที่</th>
+                <th>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="ordersBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>ประวัติการแจ้งเตือนลูกค้า</h2>
+            <div class="sub">ข้อความแจ้งเลขพัสดุ/ขอรีวิวที่ส่งทาง LINE ล่าสุด (จำลอง)</div>
+          </div>
+          <a class="btn btn-outline btn-sm" href="analytics.html">ดูสถิติทั้งหมด</a>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>วันที่/เวลา</th>
+                <th>รหัสออเดอร์</th>
+                <th>ลูกค้า</th>
+                <th>ประเภท</th>
+                <th>ข้อความ</th>
+              </tr>
+            </thead>
+            <tbody id="notificationLogBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= Modal: รายละเอียดคำสั่งซื้อ ================= -->
+<div class="modal-overlay" id="orderModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="orderModalTitle">รายละเอียดคำสั่งซื้อ</h3>
+      <button class="modal-close" onclick="closeModal('orderModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editingOrderIndex" value="-1" />
+      <div class="form-grid">
+        <div class="form-field">
+          <label>ลูกค้า</label>
+          <div id="odCustomer" class="cell-strong"></div>
+          <div class="cell-muted" id="odLineUser"></div>
+        </div>
+        <div class="form-field">
+          <label>สินค้า</label>
+          <div id="odProduct" class="cell-strong"></div>
+          <div class="cell-muted" id="odAmount"></div>
+        </div>
+
+        <div class="form-field">
+          <label>สถานะคำสั่งซื้อ</label>
+          <select id="odStatus">
+            <option value="รอชำระเงิน">รอชำระเงิน</option>
+            <option value="ชำระแล้ว">ชำระแล้ว</option>
+            <option value="จัดส่งแล้ว">จัดส่งแล้ว</option>
+            <option value="ยกเลิก">ยกเลิก</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>วันที่สั่งซื้อ</label>
+          <div id="odDate" class="cell-strong" style="padding-top:10px;"></div>
+        </div>
+
+        <div class="form-field full">
+          <label>เลขพัสดุ</label>
+          <input type="text" id="odTracking" placeholder="เช่น TH1234567890" oninput="updateTrackingPreview()" />
+          <div class="hint">เมื่อกรอกเลขพัสดุแล้วกดบันทึก ระบบจะ (จำลอง) ส่งข้อความแจ้งลูกค้าทาง LINE พร้อมลิงก์ติดตามพัสดุทันที และบันทึกลงประวัติการแจ้งเตือน</div>
+        </div>
+
+        <div class="form-field full" id="trackingPreviewWrap" style="display:none;">
+          <label>ตัวอย่างข้อความที่จะส่งให้ลูกค้าทาง LINE</label>
+          <div id="trackingPreviewText" style="background:var(--cream-2); border-radius:10px; padding:14px 16px; font-size:13.5px; color:var(--brown-deep); line-height:1.7; white-space:pre-wrap;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" id="btnSendReview" style="display:none;" onclick="sendReviewRequest()">&#11088; ส่งข้อความขอรีวิว</button>
+      <button class="btn btn-outline" onclick="closeModal('orderModal')">ปิด</button>
+      <button class="btn btn-gold" id="btnSaveOrder">&#128172; บันทึกและแจ้งลูกค้าทาง LINE</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/admin-data.js"></script>
+<script src="assets/admin.js"></script>
+<script src="../config.js"></script>
+<script src="assets/api.js"></script>
+<script>
+  requireLogin();
+  renderSidebar('orders');
+
+  let currentStatusFilter = 'all';
+
+  function orderRowHtml(o, idx){
+    return `
+      <tr>
+        <td class="cell-strong">${escapeHtml(o.orderId)}</td>
+        <td>${escapeHtml(o.customer)}<div class="cell-muted">${escapeHtml(o.lineUser)}</div></td>
+        <td>${escapeHtml(o.productName)}<div class="cell-muted">${escapeHtml(o.productCode)}</div></td>
+        <td>${formatBaht(o.amount)}</td>
+        <td>${badgeHtml(o.status, ORDER_STATUS_BADGE[o.status] || 'badge-gray')}</td>
+        <td>${o.tracking ? `<span class="cell-strong">${escapeHtml(o.tracking)}</span>` : '<span class="cell-muted">ยังไม่ระบุ</span>'}</td>
+        <td class="cell-muted">${escapeHtml(o.date)}</td>
+        <td><button class="btn btn-outline btn-sm" onclick="openOrderDetail(${idx})">ดูรายละเอียด</button></td>
+      </tr>`;
+  }
+
+  function renderOrdersTable(){
+    const q = document.getElementById('searchInput').value.trim().toLowerCase();
+    const rows = ADMIN_ORDERS
+      .map((o, idx) => ({ o, idx }))
+      .filter(({o}) => {
+        const matchStatus = currentStatusFilter === 'all' || o.status === currentStatusFilter;
+        const matchQ = !q || o.orderId.toLowerCase().includes(q) || o.customer.toLowerCase().includes(q) || o.productName.toLowerCase().includes(q);
+        return matchStatus && matchQ;
+      });
+
+    document.getElementById('orderCount').textContent = `ทั้งหมด ${ADMIN_ORDERS.length} รายการ · แสดง ${rows.length} รายการ`;
+
+    const body = document.getElementById('ordersBody');
+    if(rows.length === 0){
+      body.innerHTML = `<tr class="empty-row"><td colspan="8">ไม่พบคำสั่งซื้อที่ตรงกับเงื่อนไข</td></tr>`;
+      return;
+    }
+    body.innerHTML = rows.map(({o, idx}) => orderRowHtml(o, idx)).join('');
+  }
+
+  document.getElementById('searchInput').addEventListener('input', renderOrdersTable);
+  document.querySelectorAll('#statusTabs .tf-item').forEach(tab => {
+    tab.addEventListener('click', () => {
+      currentStatusFilter = tab.dataset.status;
+      document.querySelectorAll('#statusTabs .tf-item').forEach(t => t.classList.toggle('active', t === tab));
+      renderOrdersTable();
+    });
+  });
+
+  function trackingMessageFor(o, tracking){
+    return `พัสดุของคุณจัดส่งแล้วค่ะ! หมายเลขพัสดุ: ${tracking}\nตรวจสอบสถานะได้ที่ https://track.thailandpost.co.th/?trackNumber=${tracking}\nขอบคุณที่อุดหนุนบ้านผ้าคุณมารวยค่ะ 🙏`;
+  }
+
+  function reviewMessageFor(o){
+    return `ของถึงมือลูกค้าแล้วหรือยังคะ ร้านขอรบกวนขอรีวิว/ภาพใส่จริงเพื่อเป็นกำลังใจให้ร้านด้วยนะคะ ขอบคุณค่ะ 🙏`;
+  }
+
+  function updateTrackingPreview(){
+    const tracking = document.getElementById('odTracking').value.trim();
+    const wrap = document.getElementById('trackingPreviewWrap');
+    const text = document.getElementById('trackingPreviewText');
+    if(!tracking){ wrap.style.display = 'none'; return; }
+    const idx = Number(document.getElementById('editingOrderIndex').value);
+    const o = ADMIN_ORDERS[idx];
+    text.textContent = trackingMessageFor(o, tracking);
+    wrap.style.display = 'block';
+  }
+
+  function notificationRowHtml(n){
+    return `
+      <tr>
+        <td class="cell-muted">${escapeHtml(n.date)}</td>
+        <td class="cell-strong">${escapeHtml(n.orderId)}</td>
+        <td>${escapeHtml(n.customer)}</td>
+        <td>${badgeHtml(n.type, n.type === 'ขอรีวิวสินค้า' ? 'badge-gold' : 'badge-info')}</td>
+        <td class="cell-muted">${escapeHtml(n.message)}</td>
+      </tr>`;
+  }
+
+  function renderNotificationLog(){
+    const body = document.getElementById('notificationLogBody');
+    if(ADMIN_NOTIFICATION_LOG.length === 0){
+      body.innerHTML = `<tr class="empty-row"><td colspan="5">ยังไม่มีประวัติการแจ้งเตือน</td></tr>`;
+      return;
+    }
+    body.innerHTML = ADMIN_NOTIFICATION_LOG.slice(0, 10).map(n => notificationRowHtml(n)).join('');
+  }
+
+  async function sendReviewRequest(){
+    const idx = Number(document.getElementById('editingOrderIndex').value);
+    const o = ADMIN_ORDERS[idx];
+    try {
+      await apiCall('order.sendReview', { orderId: o.orderId });
+      await loadAdminData();
+      renderNotificationLog();
+      showToast(`ส่งข้อความขอรีวิวให้ ${o.customer} ทาง LINE แล้ว (บันทึกในระบบ)`, '&#11088;');
+    } catch(err){ showApiError(err); }
+  }
+
+  function openOrderDetail(idx){
+    const o = ADMIN_ORDERS[idx];
+    document.getElementById('editingOrderIndex').value = idx;
+    document.getElementById('orderModalTitle').textContent = 'คำสั่งซื้อ ' + o.orderId;
+    document.getElementById('odCustomer').textContent = o.customer;
+    document.getElementById('odLineUser').textContent = o.lineUser;
+    document.getElementById('odProduct').textContent = o.productName + ' (' + o.productCode + ')';
+    document.getElementById('odAmount').textContent = formatBaht(o.amount);
+    document.getElementById('odStatus').value = o.status;
+    document.getElementById('odDate').textContent = o.date;
+    document.getElementById('odTracking').value = o.tracking || '';
+    document.getElementById('btnSendReview').style.display = (o.status === 'จัดส่งแล้ว') ? 'inline-flex' : 'none';
+    updateTrackingPreview();
+    openModal('orderModal');
+  }
+
+  document.getElementById('btnSaveOrder').addEventListener('click', async function(){
+    const idx = Number(document.getElementById('editingOrderIndex').value);
+    if(idx < 0) return;
+    const o = ADMIN_ORDERS[idx];
+    const newStatus = document.getElementById('odStatus').value;
+    const tracking = document.getElementById('odTracking').value.trim();
+    const trackingJustAdded = tracking && !o.tracking;
+    const customer = o.customer;
+
+    const btn = document.getElementById('btnSaveOrder');
+    btn.disabled = true;
+    try {
+      const result = await apiCall('order.updateStatus', { orderId: o.orderId, status: newStatus, tracking });
+      await loadAdminData();
+      closeModal('orderModal');
+      renderOrdersTable();
+      renderNotificationLog();
+
+      if(trackingJustAdded){
+        showToast(`ส่งข้อความแจ้งเลขพัสดุ ${tracking} ให้ ${customer} ทาง LINE แล้ว (บันทึกในระบบ)`, '&#128230;');
+      } else {
+        showToast('บันทึกคำสั่งซื้อเรียบร้อย', '&#9989;');
+      }
+    } catch(err){ showApiError(err); } finally { btn.disabled = false; }
+  });
+
+  (async function init(){
+    try { await loadAdminData(); } catch(err){ showApiError(err); return; }
+    renderOrdersTable();
+    renderNotificationLog();
+  })();
+</script>
+</body>
+</html>

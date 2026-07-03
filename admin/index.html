@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>แดชบอร์ด | ระบบหลังบ้าน บ้านผ้าคุณมารวย</title>
+
+<!--
+  ==========================================================================
+  ร่างระบบหลังบ้าน (Draft Admin Backend) — บ้านผ้าคุณมารวย
+  หน้านี้เป็นแดชบอร์ดภาพรวม ใช้ข้อมูลจำลองทั้งหมดจาก assets/admin-data.js
+  TODO ก่อนใช้งานจริง:
+  1) เชื่อม KPI และตารางกับ Google Apps Script Web App (อ่านจาก Sheets จริง)
+  2) เพิ่มระบบยืนยันตัวตนแอดมิน (ตอนนี้ยังไม่มีการล็อกอิน/สิทธิ์การเข้าถึง)
+  3) เชื่อมกราฟยอดขายกับข้อมูล orders จริงแทน ADMIN_SALES_7D
+  ==========================================================================
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/admin.css">
+</head>
+<body>
+<div class="app">
+  <div id="sidebarMount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="tb-left">
+        <button class="menu-toggle" id="menuToggleBtn" aria-label="เมนู">&#9776;</button>
+        <div>
+          <h1>แดชบอร์ดภาพรวม</h1>
+          <div class="breadcrumb">ระบบหลังบ้าน / แดชบอร์ด</div>
+        </div>
+      </div>
+      <div class="tb-right">
+        <div class="admin-chip">
+          <div class="avatar">มร</div>
+          <div class="who">แอดมินร้าน</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="draft-banner">
+        <span class="ic">&#128274;</span>
+        <div>เชื่อมต่อกับ Google Sheets จริงผ่าน Apps Script Web App แล้ว (มีระบบล็อกอินแอดมิน) — หากข้อมูลไม่ขึ้น ให้ตรวจสอบ <code>config.js</code> และการ Deploy ตามคู่มือติดตั้ง</div>
+      </div>
+
+      <div class="kpi-grid" id="kpiGrid"></div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>ยอดขาย 7 วันล่าสุด</h2>
+              <div class="sub">ข้อมูลตัวอย่าง — เชื่อมกับแท็บ orders จริงภายหลัง</div>
+            </div>
+          </div>
+          <div class="bar-chart" id="salesChart"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>งานด่วน</h2>
+              <div class="sub">ทางลัดไปยังงานที่ทำบ่อย</div>
+            </div>
+          </div>
+          <div class="stack">
+            <a class="btn btn-gold" href="products.html?new=1">&#10133; เพิ่มสินค้าใหม่</a>
+            <a class="btn btn-outline" href="promotions.html?new=1">&#127991;&#65039; สร้างโปรโมชั่นใหม่</a>
+            <a class="btn btn-outline" href="orders.html">&#128230; ดูคำสั่งซื้อทั้งหมด</a>
+            <a class="btn btn-outline" href="categories.html?new=1">&#128194; เพิ่มหมวดหมู่สินค้า</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>คำสั่งซื้อล่าสุด</h2>
+            <div class="sub">5 รายการล่าสุด</div>
+          </div>
+          <a class="btn btn-outline btn-sm" href="orders.html">ดูทั้งหมด</a>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>รหัสออเดอร์</th>
+                <th>ลูกค้า</th>
+                <th>สินค้า</th>
+                <th>ยอด</th>
+                <th>สถานะ</th>
+                <th>วันที่</th>
+              </tr>
+            </thead>
+            <tbody id="recentOrdersBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>สินค้าใกล้หมด / หมดสต็อก</h2>
+            <div class="sub">เหลือ 1 ชิ้นหรือน้อยกว่า — ควรเติมสต็อกหรือปิดการขาย</div>
+          </div>
+          <a class="btn btn-outline btn-sm" href="products.html">จัดการสินค้า</a>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>รหัสสินค้า</th>
+                <th>ชื่อสินค้า</th>
+                <th>หมวด</th>
+                <th>คงเหลือ</th>
+                <th>สถานะ</th>
+              </tr>
+            </thead>
+            <tbody id="lowStockBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/admin-data.js"></script>
+<script src="assets/admin.js"></script>
+<script src="../config.js"></script>
+<script src="assets/api.js"></script>
+<script>
+requireLogin();
+renderSidebar('dashboard');
+
+(async function init(){
+  try { await loadAdminData(); } catch(err){ showApiError(err); return; }
+
+  // ---------------- KPI cards ----------------
+  const todaySales = ADMIN_SALES_7D[ADMIN_SALES_7D.length - 1].value;
+  const pendingOrders = ADMIN_ORDERS.filter(o => o.status === "รอชำระเงิน" || o.status === "ชำระแล้ว").length;
+  const lowStock = ADMIN_PRODUCTS.filter(p => p.stock <= 1 && p.status !== "ขายแล้ว");
+  const activeProducts = ADMIN_PRODUCTS.filter(p => p.status !== "ขายแล้ว").length;
+
+  const kpis = [
+    { label:"ยอดขายวันนี้", value: formatBaht(todaySales), icon:"&#128176;", bg:"var(--ok-bg)", color:"var(--ok)", trend:"เทียบเมื่อวาน +18%", trendClass:"up" },
+    { label:"ออเดอร์รอดำเนินการ", value: pendingOrders + " รายการ", icon:"&#128230;", bg:"var(--warn-bg)", color:"var(--warn)", trend:"ต้องติดตาม", trendClass:"" },
+    { label:"สินค้าใกล้หมด/หมดสต็อก", value: lowStock.length + " รายการ", icon:"&#9888;&#65039;", bg:"var(--danger-bg)", color:"var(--danger)", trend:"ควรเติมสต็อก", trendClass:"down" },
+    { label:"สินค้าที่เปิดขายทั้งหมด", value: activeProducts + " รายการ", icon:"&#129525;", bg:"var(--info-bg)", color:"var(--info)", trend:"ทุกหมวดรวมกัน", trendClass:"" },
+  ];
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k => `
+    <div class="kpi-card">
+      <div class="kpi-ic" style="background:${k.bg}; color:${k.color};">${k.icon}</div>
+      <div>
+        <div class="kpi-label">${k.label}</div>
+        <div class="kpi-value">${k.value}</div>
+        <div class="kpi-trend ${k.trendClass}">${k.trend}</div>
+      </div>
+    </div>
+  `).join('');
+
+  // ---------------- Bar chart ยอดขาย 7 วัน ----------------
+  const maxVal = Math.max(...ADMIN_SALES_7D.map(d => d.value));
+  document.getElementById('salesChart').innerHTML = ADMIN_SALES_7D.map(d => `
+    <div class="bar-col">
+      <div class="bar-val">${formatNumber(d.value)}</div>
+      <div class="bar" style="height:${Math.max(8, Math.round((d.value / maxVal) * 120))}px;"></div>
+      <div class="bar-day">${d.day}</div>
+    </div>
+  `).join('');
+
+  // ---------------- คำสั่งซื้อล่าสุด ----------------
+  const recent = ADMIN_ORDERS.slice(0, 5);
+  document.getElementById('recentOrdersBody').innerHTML = recent.map(o => `
+    <tr>
+      <td class="cell-strong">${escapeHtml(o.orderId)}</td>
+      <td>${escapeHtml(o.customer)}<div class="cell-muted">${escapeHtml(o.lineUser)}</div></td>
+      <td>${escapeHtml(o.productName)}</td>
+      <td>${formatBaht(o.amount)}</td>
+      <td>${badgeHtml(o.status, ORDER_STATUS_BADGE[o.status] || 'badge-gray')}</td>
+      <td class="cell-muted">${escapeHtml(o.date)}</td>
+    </tr>
+  `).join('');
+
+  // ---------------- สินค้าใกล้หมด ----------------
+  if(lowStock.length === 0){
+    document.getElementById('lowStockBody').innerHTML = `<tr class="empty-row"><td colspan="5">ไม่มีสินค้าใกล้หมดในขณะนี้</td></tr>`;
+  } else {
+    document.getElementById('lowStockBody').innerHTML = lowStock.map(p => `
+      <tr>
+        <td class="cell-strong">${escapeHtml(p.code)}</td>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${p.mainCat === 'new' ? 'สินค้าใหม่ มือ 1' : 'สินค้ามือสอง'} · ${escapeHtml(p.type)}</td>
+        <td>${p.stock} ชิ้น</td>
+        <td>${badgeHtml(p.status, PRODUCT_STATUS_BADGE[p.status] || 'badge-gray')}</td>
+      </tr>
+    `).join('');
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ต้นทุน/ค่าใช้จ่าย | ระบบหลังบ้าน บ้านผ้าคุณมารวย</title>
+
+<!--
+  ==========================================================================
+  ร่างระบบหลังบ้าน — หน้าต้นทุนการดำเนินการ (operating costs)
+  เก็บค่าใช้จ่ายที่ไม่ผูกกับสินค้าชิ้นใดชิ้นหนึ่ง เช่น แพ็กเกจ LINE OA,
+  โดเมน, คลังภาพ, ค่าส่ง/บรรจุภัณฑ์เฉลี่ย, การตลาด ฯลฯ (อ้างอิงตารางต้นทุน
+  เครื่องมือในเอกสารส่วนที่ 6.1) ส่วนต้นทุนต่อสินค้าแต่ละชิ้นบันทึกแยกไว้ที่
+  หน้า "จัดการสินค้า" (ฟิลด์ต้นทุนสินค้า)
+  TODO ก่อนใช้งานจริง: เชื่อมกับแท็บ operating_costs ใหม่ใน Google Sheet
+  ==========================================================================
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/admin.css">
+</head>
+<body>
+<div class="app">
+  <div id="sidebarMount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="tb-left">
+        <button class="menu-toggle" id="menuToggleBtn" aria-label="เมนู">&#9776;</button>
+        <div>
+          <h1>ต้นทุน/ค่าใช้จ่าย</h1>
+          <div class="breadcrumb">ระบบหลังบ้าน / ต้นทุน-ค่าใช้จ่าย</div>
+        </div>
+      </div>
+      <div class="tb-right">
+        <div class="admin-chip"><div class="avatar">มร</div><div class="who">แอดมินร้าน</div></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="draft-banner">
+        <span class="ic">&#128274;</span>
+        <div>บันทึกต้นทุนการดำเนินการที่ไม่ผูกกับสินค้าชิ้นใดชิ้นหนึ่งลงแท็บ <code>operating_costs</code> จริง ส่วนต้นทุนต่อชิ้นของสินค้าแต่ละรายการให้กรอกในหน้า &ldquo;จัดการสินค้า&rdquo;</div>
+      </div>
+
+      <div class="kpi-grid" id="costKpiGrid"></div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>รายการต้นทุน/ค่าใช้จ่าย</h2>
+            <div class="sub"><span id="costCount"></span></div>
+          </div>
+          <button class="btn btn-gold" id="btnAddCost">&#10133; เพิ่มรายการต้นทุน</button>
+        </div>
+
+        <div class="toolbar">
+          <div class="tab-filter" id="freqTabs">
+            <div class="tf-item active" data-freq="all">ทั้งหมด</div>
+            <div class="tf-item" data-freq="รายเดือน">รายเดือน</div>
+            <div class="tf-item" data-freq="รายปี">รายปี</div>
+            <div class="tf-item" data-freq="ต่อออเดอร์">ต่อออเดอร์</div>
+            <div class="tf-item" data-freq="ครั้งเดียว">ครั้งเดียว</div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>รหัส</th>
+                <th>หมวดต้นทุน</th>
+                <th>รายการ</th>
+                <th>จำนวนเงิน</th>
+                <th>ความถี่</th>
+                <th>วันที่</th>
+                <th>หมายเหตุ</th>
+                <th>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="costsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>มูลค่าต้นทุนสินค้าคงคลัง</h2>
+            <div class="sub">คำนวณจากต้นทุนต่อชิ้น &times; จำนวนคงเหลือ ของสินค้าทุกรายการในหน้า &ldquo;จัดการสินค้า&rdquo;</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>รหัสสินค้า</th>
+                <th>ชื่อสินค้า</th>
+                <th>ต้นทุน/ชิ้น</th>
+                <th>คงเหลือ</th>
+                <th>มูลค่าต้นทุนรวม</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryCostBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= Modal: เพิ่ม/แก้ไขต้นทุน ================= -->
+<div class="modal-overlay" id="costModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-head">
+      <h3 id="costModalTitle">เพิ่มรายการต้นทุน</h3>
+      <button class="modal-close" onclick="closeModal('costModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editingCostIndex" value="-1" />
+      <div class="form-grid">
+        <div class="form-field full">
+          <label>หมวดต้นทุน *</label>
+          <input type="text" id="oCategory" list="costCategoryList" placeholder="เช่น แพ็กเกจ LINE OA" />
+          <datalist id="costCategoryList">
+            <option value="แพ็กเกจ LINE OA"></option>
+            <option value="โดเมนเนม"></option>
+            <option value="คลังภาพ/ลายน้ำ"></option>
+            <option value="บรรจุภัณฑ์/ค่าส่ง"></option>
+            <option value="การตลาด/โฆษณา"></option>
+            <option value="อื่นๆ"></option>
+          </datalist>
+        </div>
+        <div class="form-field full">
+          <label>รายการ *</label>
+          <input type="text" id="oItem" placeholder="เช่น LINE OA แพ็กเกจ Basic" />
+        </div>
+
+        <div class="form-field">
+          <label>จำนวนเงิน (บาท) *</label>
+          <input type="number" id="oAmount" min="0" placeholder="เช่น 1280" />
+        </div>
+        <div class="form-field">
+          <label>ความถี่ *</label>
+          <select id="oFrequency">
+            <option value="รายเดือน">รายเดือน</option>
+            <option value="รายปี">รายปี</option>
+            <option value="ต่อออเดอร์">ต่อออเดอร์</option>
+            <option value="ครั้งเดียว">ครั้งเดียว</option>
+          </select>
+        </div>
+
+        <div class="form-field full">
+          <label>วันที่</label>
+          <input type="date" id="oDate" />
+        </div>
+        <div class="form-field full">
+          <label>หมายเหตุ</label>
+          <input type="text" id="oNote" placeholder="รายละเอียดเพิ่มเติม" />
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('costModal')">ยกเลิก</button>
+      <button class="btn btn-gold" id="btnSaveCost">บันทึกรายการ</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/admin-data.js"></script>
+<script src="assets/admin.js"></script>
+<script src="../config.js"></script>
+<script src="assets/api.js"></script>
+<script>
+  requireLogin();
+  renderSidebar('costs');
+
+  let currentFreqFilter = 'all';
+
+  function monthlyOrderCount(){
+    // ประมาณจากจำนวนออเดอร์ทั้งหมดในข้อมูลตัวอย่าง (mock)
+    return ADMIN_ORDERS.length;
+  }
+
+  function computeCostSummary(){
+    const monthlyFixed = ADMIN_OPERATING_COSTS.filter(c => c.frequency === 'รายเดือน').reduce((s,c)=> s + c.amount, 0);
+    const yearlyAsMonthly = ADMIN_OPERATING_COSTS.filter(c => c.frequency === 'รายปี').reduce((s,c)=> s + c.amount, 0) / 12;
+    const perOrder = ADMIN_OPERATING_COSTS.filter(c => c.frequency === 'ต่อออเดอร์').reduce((s,c)=> s + c.amount, 0);
+    const perOrderTotal = perOrder * monthlyOrderCount();
+    const oneTimeThisMonth = ADMIN_OPERATING_COSTS.filter(c => c.frequency === 'ครั้งเดียว' && c.date && c.date.slice(0,7) === new Date().toISOString().slice(0,7)).reduce((s,c)=> s + c.amount, 0);
+    const inventoryValue = ADMIN_PRODUCTS.reduce((s,p)=> s + (p.cost || 0) * (p.stock || 0), 0);
+    return { monthlyFixed, yearlyAsMonthly, perOrderTotal, oneTimeThisMonth, inventoryValue,
+      totalMonthly: monthlyFixed + yearlyAsMonthly + perOrderTotal };
+  }
+
+  function renderCostKpis(){
+    const s = computeCostSummary();
+    const kpis = [
+      { label:"ต้นทุนคงที่โดยประมาณ/เดือน", value: formatBaht(Math.round(s.totalMonthly)), icon:"&#128176;", bg:"var(--warn-bg)", color:"var(--warn)", trend:"รวมรายเดือน+รายปีเฉลี่ย+ต่อออเดอร์" },
+      { label:"ค่าใช้จ่ายพิเศษเดือนนี้", value: formatBaht(s.oneTimeThisMonth), icon:"&#129534;", bg:"var(--danger-bg)", color:"var(--danger)", trend:"รายการแบบครั้งเดียว" },
+      { label:"มูลค่าต้นทุนสินค้าคงคลัง", value: formatBaht(Math.round(s.inventoryValue)), icon:"&#129525;", bg:"var(--info-bg)", color:"var(--info)", trend:"ต้นทุน &times; จำนวนคงเหลือ" },
+      { label:"จำนวนรายการต้นทุนทั้งหมด", value: ADMIN_OPERATING_COSTS.length + " รายการ", icon:"&#128203;", bg:"var(--ok-bg)", color:"var(--ok)", trend:"บันทึกไว้ในระบบ" },
+    ];
+    document.getElementById('costKpiGrid').innerHTML = kpis.map(k => `
+      <div class="kpi-card">
+        <div class="kpi-ic" style="background:${k.bg}; color:${k.color};">${k.icon}</div>
+        <div>
+          <div class="kpi-label">${k.label}</div>
+          <div class="kpi-value">${k.value}</div>
+          <div class="kpi-trend">${k.trend}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function costRowHtml(c, idx){
+    return `
+      <tr>
+        <td class="cell-strong">${escapeHtml(c.code)}</td>
+        <td>${escapeHtml(c.category)}</td>
+        <td>${escapeHtml(c.item)}</td>
+        <td class="cell-strong">${formatBaht(c.amount)}</td>
+        <td>${badgeHtml(c.frequency, 'badge-info')}</td>
+        <td class="cell-muted">${escapeHtml(c.date || '-')}</td>
+        <td class="cell-muted">${escapeHtml(c.note || '-')}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn btn-outline btn-sm btn-icon" title="แก้ไข" onclick="editCost(${idx})">&#9999;&#65039;</button>
+            <button class="btn btn-danger-outline btn-sm btn-icon" title="ลบ" onclick="deleteCost(${idx})">&#128465;&#65039;</button>
+          </div>
+        </td>
+      </tr>`;
+  }
+
+  function renderCostsTable(){
+    const rows = ADMIN_OPERATING_COSTS
+      .map((c, idx) => ({ c, idx }))
+      .filter(({c}) => currentFreqFilter === 'all' || c.frequency === currentFreqFilter);
+
+    document.getElementById('costCount').textContent = `ทั้งหมด ${ADMIN_OPERATING_COSTS.length} รายการ · แสดง ${rows.length} รายการ`;
+
+    const body = document.getElementById('costsBody');
+    if(rows.length === 0){
+      body.innerHTML = `<tr class="empty-row"><td colspan="8">ยังไม่มีรายการต้นทุนในตัวกรองนี้</td></tr>`;
+      return;
+    }
+    body.innerHTML = rows.map(({c, idx}) => costRowHtml(c, idx)).join('');
+    renderCostKpis();
+  }
+
+  document.querySelectorAll('#freqTabs .tf-item').forEach(tab => {
+    tab.addEventListener('click', () => {
+      currentFreqFilter = tab.dataset.freq;
+      document.querySelectorAll('#freqTabs .tf-item').forEach(t => t.classList.toggle('active', t === tab));
+      renderCostsTable();
+    });
+  });
+
+  function renderInventoryCostTable(){
+    const body = document.getElementById('inventoryCostBody');
+    const rows = ADMIN_PRODUCTS.filter(p => p.cost);
+    if(rows.length === 0){
+      body.innerHTML = `<tr class="empty-row"><td colspan="5">ยังไม่มีข้อมูลต้นทุนสินค้า</td></tr>`;
+      return;
+    }
+    body.innerHTML = rows.map(p => `
+      <tr>
+        <td class="cell-strong">${escapeHtml(p.code)}</td>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${formatBaht(p.cost)}</td>
+        <td>${p.stock} ชิ้น</td>
+        <td class="cell-strong">${formatBaht(p.cost * p.stock)}</td>
+      </tr>`).join('');
+  }
+
+  function openAddCostModal(){
+    document.getElementById('editingCostIndex').value = -1;
+    document.getElementById('costModalTitle').textContent = 'เพิ่มรายการต้นทุน';
+    document.getElementById('oCategory').value = '';
+    document.getElementById('oItem').value = '';
+    document.getElementById('oAmount').value = '';
+    document.getElementById('oFrequency').value = 'รายเดือน';
+    document.getElementById('oDate').value = new Date().toISOString().slice(0,10);
+    document.getElementById('oNote').value = '';
+    openModal('costModal');
+  }
+  document.getElementById('btnAddCost').addEventListener('click', openAddCostModal);
+  if(new URLSearchParams(location.search).get('new') === '1'){ openAddCostModal(); }
+
+  function editCost(idx){
+    const c = ADMIN_OPERATING_COSTS[idx];
+    document.getElementById('editingCostIndex').value = idx;
+    document.getElementById('costModalTitle').textContent = 'แก้ไขรายการต้นทุน: ' + c.item;
+    document.getElementById('oCategory').value = c.category;
+    document.getElementById('oItem').value = c.item;
+    document.getElementById('oAmount').value = c.amount;
+    document.getElementById('oFrequency').value = c.frequency;
+    document.getElementById('oDate').value = c.date;
+    document.getElementById('oNote').value = c.note || '';
+    openModal('costModal');
+  }
+
+  async function deleteCost(idx){
+    const c = ADMIN_OPERATING_COSTS[idx];
+    if(!confirm(`ยืนยันลบรายการต้นทุน "${c.item}" ?`)) return;
+    try {
+      await apiCall('cost.delete', { code: c.code });
+      await loadAdminData();
+      renderCostsTable();
+      showToast('ลบรายการต้นทุนเรียบร้อย', '&#128465;&#65039;');
+    } catch(err){ showApiError(err); }
+  }
+
+  document.getElementById('btnSaveCost').addEventListener('click', async function(){
+    const category = document.getElementById('oCategory').value.trim();
+    const item = document.getElementById('oItem').value.trim();
+    const amount = Number(document.getElementById('oAmount').value);
+    if(!category || !item || !amount){
+      alert('กรุณากรอกหมวดต้นทุน รายการ และจำนวนเงินให้ครบถ้วน');
+      return;
+    }
+    const frequency = document.getElementById('oFrequency').value;
+    const date = document.getElementById('oDate').value;
+    const note = document.getElementById('oNote').value.trim();
+    const idx = Number(document.getElementById('editingCostIndex').value);
+    const btn = document.getElementById('btnSaveCost');
+    btn.disabled = true;
+    try {
+      if(idx >= 0){
+        const code = ADMIN_OPERATING_COSTS[idx].code;
+        await apiCall('cost.update', { code, category, item, amount, frequency, date, note });
+        await loadAdminData();
+        showToast('บันทึกการแก้ไขรายการต้นทุนเรียบร้อย', '&#9989;');
+      } else {
+        await apiCall('cost.create', { category, item, amount, frequency, date, note });
+        await loadAdminData();
+        showToast('เพิ่มรายการต้นทุนเรียบร้อย', '&#10133;');
+      }
+      closeModal('costModal');
+      renderCostsTable();
+    } catch(err){ showApiError(err); } finally { btn.disabled = false; }
+  });
+
+  (async function init(){
+    try { await loadAdminData(); } catch(err){ showApiError(err); return; }
+    renderCostsTable();
+    renderInventoryCostTable();
+  })();
+</script>
+</body>
+</html>

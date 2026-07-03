@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>วิเคราะห์ผลงาน | ระบบหลังบ้าน บ้านผ้าคุณมารวย</title>
+
+<!--
+  ==========================================================================
+  ร่างระบบหลังบ้าน — หน้าวิเคราะห์ผลงานและแนวโน้มธุรกิจ
+  รวม KPI ตามเอกสารส่วนที่ 5.5 (จำนวนเพื่อน LINE OA, อัตราเปิดอ่าน Broadcast,
+  สัดส่วนยอดขาย LINE เทียบเฟซบุ๊ก, อัตราซื้อซ้ำ) + แนวโน้มยอดขาย + สินค้าขายดี
+  + สถิติการเผยแพร่คอนเทนต์ต่อช่องทาง + กำไรขั้นต้นโดยประมาณจากข้อมูลต้นทุน
+  TODO ก่อนใช้งานจริง: ดึงข้อมูลจริงจาก Google Sheets ทุกแท็บที่เกี่ยวข้อง
+  แทนการคำนวณจากข้อมูลตัวอย่างในเบราว์เซอร์
+  ==========================================================================
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/admin.css">
+</head>
+<body>
+<div class="app">
+  <div id="sidebarMount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="tb-left">
+        <button class="menu-toggle" id="menuToggleBtn" aria-label="เมนู">&#9776;</button>
+        <div>
+          <h1>วิเคราะห์ผลงาน</h1>
+          <div class="breadcrumb">ระบบหลังบ้าน / วิเคราะห์ผลงานและแนวโน้มธุรกิจ</div>
+        </div>
+      </div>
+      <div class="tb-right">
+        <div class="admin-chip"><div class="avatar">มร</div><div class="who">แอดมินร้าน</div></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="draft-banner">
+        <span class="ic">&#128274;</span>
+        <div>ยอดขาย/ต้นทุน/กำไรคำนวณจากข้อมูลจริงในแท็บ <code>orders</code>, <code>products</code>, <code>operating_costs</code> — สถิติการเข้าถึง/engagement ของ LINE และเฟซบุ๊ก (แท็บ <code>content_log</code>) ยังเป็นข้อมูลตัวอย่าง เนื่องจากยังไม่เชื่อม LINE/Facebook API จริง</div>
+      </div>
+
+      <div class="kpi-grid" id="analyticsKpiGrid"></div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>แนวโน้มยอดขาย 6 เดือนล่าสุด</h2>
+              <div class="sub">เปรียบเทียบสินค้าใหม่มือ 1 กับสินค้ามือสอง</div>
+            </div>
+          </div>
+          <div class="trend-chart" id="trendChart"></div>
+          <div class="chart-legend">
+            <span><span class="dot" style="background:var(--gold);"></span>สินค้าใหม่ มือ 1</span>
+            <span><span class="dot" style="background:var(--plum);"></span>สินค้ามือสอง</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>สัดส่วนยอดขายเดือนนี้</h2>
+              <div class="sub">ใหม่ vs มือสอง</div>
+            </div>
+          </div>
+          <div class="split-bar" id="catSplitBar"></div>
+          <div class="mt-16">
+            <div class="panel-head" style="margin-bottom:8px;">
+              <div class="sub" style="margin:0;">สัดส่วนยอดขายตามช่องทาง (โดยประมาณจากยอดเข้าถึงคอนเทนต์)</div>
+            </div>
+            <div class="split-bar" id="channelSplitBar"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>สินค้าขายดี Top 5</h2>
+              <div class="sub">เรียงตามยอดขายรวม (ไม่รวมออเดอร์ที่ยกเลิก)</div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>อันดับ</th><th>สินค้า</th><th>จำนวนออเดอร์</th><th>ยอดขายรวม</th></tr></thead>
+              <tbody id="topProductsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>สถิติการเผยแพร่คอนเทนต์ต่อช่องทาง</h2>
+              <div class="sub">รวมจำนวนโพสต์/ข้อความ ยอดเข้าถึง และ engagement</div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>ช่องทาง</th><th>จำนวนครั้ง</th><th>ยอดเข้าถึงรวม</th><th>Engagement รวม</th></tr></thead>
+              <tbody id="channelStatsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>&#128161; แนวโน้มธุรกิจ &amp; ข้อสังเกตอัตโนมัติ</h2>
+            <div class="sub">สรุปจากข้อมูลตัวอย่างในระบบ ณ ขณะนี้</div>
+          </div>
+        </div>
+        <div class="insight-list" id="insightList"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>บันทึกการเผยแพร่คอนเทนต์ล่าสุด</h2>
+            <div class="sub">LINE OA / เพจเฟซบุ๊ก / เว็บแคตตาล็อก</div>
+          </div>
+          <a class="btn btn-outline btn-sm" href="products.html">ไปหน้าจัดการสินค้า</a>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>วันที่/เวลา</th><th>ช่องทาง</th><th>ประเภท</th><th>หัวข้อ/สินค้า</th><th>เข้าถึง</th><th>Engagement</th></tr></thead>
+            <tbody id="contentLogBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>บันทึกการแจ้งเตือนลูกค้าล่าสุด</h2>
+            <div class="sub">แจ้งเลขพัสดุ / ขอรีวิวสินค้า ผ่าน LINE</div>
+          </div>
+          <a class="btn btn-outline btn-sm" href="orders.html">ไปหน้าคำสั่งซื้อ</a>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>วันที่/เวลา</th><th>รหัสออเดอร์</th><th>ลูกค้า</th><th>ประเภท</th></tr></thead>
+            <tbody id="notifLogBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/admin-data.js"></script>
+<script src="assets/admin.js"></script>
+<script src="../config.js"></script>
+<script src="assets/api.js"></script>
+<script>
+  requireLogin();
+  renderSidebar('analytics');
+
+  // ---------------- ต้นทุน/กำไรโดยประมาณ (สอดคล้องกับตรรกะในหน้าต้นทุน) ----------------
+  function monthlyOrderCount(){ return ADMIN_ORDERS.length; }
+
+  function computeCostSummary(){
+    const monthlyFixed = ADMIN_OPERATING_COSTS.filter(c => c.frequency === 'รายเดือน').reduce((s,c)=> s + c.amount, 0);
+    const yearlyAsMonthly = ADMIN_OPERATING_COSTS.filter(c => c.frequency === 'รายปี').reduce((s,c)=> s + c.amount, 0) / 12;
+    const perOrder = ADMIN_OPERATING_COSTS.filter(c => c.frequency === 'ต่อออเดอร์').reduce((s,c)=> s + c.amount, 0);
+    const perOrderTotal = perOrder * monthlyOrderCount();
+    return { totalMonthly: monthlyFixed + yearlyAsMonthly + perOrderTotal };
+  }
+
+  function computeGrossProfitThisMonth(){
+    const validOrders = ADMIN_ORDERS.filter(o => o.status !== 'ยกเลิก');
+    const revenue = validOrders.reduce((s,o)=> s + o.amount, 0);
+    const cogs = validOrders.reduce((s,o)=>{
+      const p = ADMIN_PRODUCTS.find(x => x.code === o.productCode);
+      return s + (p ? (p.cost || 0) : 0);
+    }, 0);
+    return { revenue, cogs, grossProfit: revenue - cogs };
+  }
+
+  // ---------------- KPI cards ----------------
+  function renderKpis(){
+    const thisMonth = ADMIN_SALES_6M[ADMIN_SALES_6M.length - 1];
+    const prevMonth = ADMIN_SALES_6M[ADMIN_SALES_6M.length - 2];
+    const thisTotal = thisMonth.newAmount + thisMonth.secondAmount;
+    const prevTotal = prevMonth.newAmount + prevMonth.secondAmount;
+    const growth = prevTotal ? Math.round(((thisTotal - prevTotal) / prevTotal) * 100) : 0;
+
+    const { grossProfit } = computeGrossProfitThisMonth();
+    const { totalMonthly } = computeCostSummary();
+    const netProfitEst = grossProfit - totalMonthly;
+
+    const kpis = [
+      { label:"ยอดขายเดือนนี้ (โดยประมาณ)", value: formatBaht(thisTotal), icon:"&#128176;", bg:"var(--ok-bg)", color:"var(--ok)", trend: (growth >= 0 ? '+' : '') + growth + '% เทียบเดือนก่อน' },
+      { label:"กำไรขั้นต้นโดยประมาณ", value: formatBaht(Math.round(grossProfit)), icon:"&#128202;", bg:"var(--info-bg)", color:"var(--info)", trend:"รายได้ลบต้นทุนสินค้า (COGS)" },
+      { label:"กำไรสุทธิโดยประมาณ", value: formatBaht(Math.round(netProfitEst)), icon:"&#129297;", bg: netProfitEst >= 0 ? "var(--ok-bg)" : "var(--danger-bg)", color: netProfitEst >= 0 ? "var(--ok)" : "var(--danger)", trend:"หลังหักต้นทุนดำเนินการ/เดือน" },
+      { label:"อัตราการซื้อซ้ำ (ตัวอย่าง)", value:"34%", icon:"&#128257;", bg:"var(--warn-bg)", color:"var(--warn)", trend:"เป้าหมาย KPI ตามเอกสารส่วนที่ 5.5" },
+    ];
+    document.getElementById('analyticsKpiGrid').innerHTML = kpis.map(k => `
+      <div class="kpi-card">
+        <div class="kpi-ic" style="background:${k.bg}; color:${k.color};">${k.icon}</div>
+        <div>
+          <div class="kpi-label">${k.label}</div>
+          <div class="kpi-value">${k.value}</div>
+          <div class="kpi-trend">${k.trend}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ---------------- แนวโน้มยอดขาย 6 เดือน ----------------
+  function renderTrendChart(){
+    const maxVal = Math.max(...ADMIN_SALES_6M.map(m => Math.max(m.newAmount, m.secondAmount)));
+    document.getElementById('trendChart').innerHTML = ADMIN_SALES_6M.map(m => `
+      <div class="trend-col">
+        <div class="trend-bars">
+          <div class="trend-bar new" style="height:${Math.max(6, Math.round((m.newAmount/maxVal)*150))}px;" title="ใหม่ ${formatBaht(m.newAmount)}"></div>
+          <div class="trend-bar second" style="height:${Math.max(6, Math.round((m.secondAmount/maxVal)*150))}px;" title="มือสอง ${formatBaht(m.secondAmount)}"></div>
+        </div>
+        <div class="trend-total">${formatNumber(m.newAmount + m.secondAmount)}</div>
+        <div class="trend-month">${m.month}</div>
+      </div>
+    `).join('');
+  }
+
+  // ---------------- สัดส่วนยอดขาย ใหม่ vs มือสอง ----------------
+  function renderCatSplit(){
+    const thisMonth = ADMIN_SALES_6M[ADMIN_SALES_6M.length - 1];
+    const total = thisMonth.newAmount + thisMonth.secondAmount;
+    const newPct = Math.round((thisMonth.newAmount / total) * 100);
+    const secondPct = 100 - newPct;
+    document.getElementById('catSplitBar').innerHTML = `
+      <div class="seg-new" style="width:${newPct}%;">${newPct}%</div>
+      <div class="seg-second" style="width:${secondPct}%;">${secondPct}%</div>
+    `;
+  }
+
+  // ---------------- สัดส่วนยอดขายตามช่องทาง (ประมาณจาก reach ของ content log) ----------------
+  function renderChannelSplit(){
+    const lineReach = ADMIN_CONTENT_LOG.filter(c => c.channel === 'line').reduce((s,c)=> s + c.reach, 0);
+    const fbReach = ADMIN_CONTENT_LOG.filter(c => c.channel === 'fb1' || c.channel === 'fb2').reduce((s,c)=> s + c.reach, 0);
+    const webReach = ADMIN_CONTENT_LOG.filter(c => c.channel === 'web').reduce((s,c)=> s + c.reach, 0);
+    const total = lineReach + fbReach + webReach || 1;
+    const linePct = Math.round((lineReach/total)*100);
+    const fbPct = Math.round((fbReach/total)*100);
+    const webPct = 100 - linePct - fbPct;
+    document.getElementById('channelSplitBar').innerHTML = `
+      <div class="seg-new" style="width:${linePct}%;" title="LINE OA">LINE ${linePct}%</div>
+      <div class="seg-second" style="width:${fbPct}%; background:linear-gradient(90deg, var(--info), #4a90c4);" title="เฟซบุ๊ก">FB ${fbPct}%</div>
+      <div class="seg-new" style="width:${webPct}%; background:linear-gradient(90deg, var(--muted), #a89a86);" title="เว็บ">เว็บ ${webPct}%</div>
+    `;
+  }
+
+  // ---------------- สินค้าขายดี Top 5 ----------------
+  function renderTopProducts(){
+    const grouped = {};
+    ADMIN_ORDERS.filter(o => o.status !== 'ยกเลิก').forEach(o => {
+      if(!grouped[o.productCode]) grouped[o.productCode] = { name:o.productName, count:0, total:0 };
+      grouped[o.productCode].count += 1;
+      grouped[o.productCode].total += o.amount;
+    });
+    const top = Object.values(grouped).sort((a,b)=> b.total - a.total).slice(0,5);
+    const body = document.getElementById('topProductsBody');
+    if(top.length === 0){
+      body.innerHTML = `<tr class="empty-row"><td colspan="4">ยังไม่มีข้อมูลยอดขาย</td></tr>`;
+      return;
+    }
+    body.innerHTML = top.map((t, i) => `
+      <tr>
+        <td class="cell-strong">#${i+1}</td>
+        <td>${escapeHtml(t.name)}</td>
+        <td>${t.count} ออเดอร์</td>
+        <td class="cell-strong">${formatBaht(t.total)}</td>
+      </tr>`).join('');
+  }
+
+  // ---------------- สถิติคอนเทนต์ต่อช่องทาง ----------------
+  function renderChannelStats(){
+    const channels = ['line','fb1','fb2','web'];
+    const body = document.getElementById('channelStatsBody');
+    body.innerHTML = channels.map(ch => {
+      const rows = ADMIN_CONTENT_LOG.filter(c => c.channel === ch);
+      const reach = rows.reduce((s,c)=> s + c.reach, 0);
+      const eng = rows.reduce((s,c)=> s + c.engagement, 0);
+      return `
+        <tr>
+          <td class="cell-strong">${CHANNEL_ICON[ch].icon} ${CHANNEL_ICON[ch].label}</td>
+          <td>${rows.length} ครั้ง</td>
+          <td>${formatNumber(reach)}</td>
+          <td>${formatNumber(eng)}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  // ---------------- บันทึกคอนเทนต์ล่าสุด ----------------
+  function renderContentLog(){
+    const body = document.getElementById('contentLogBody');
+    if(ADMIN_CONTENT_LOG.length === 0){
+      body.innerHTML = `<tr class="empty-row"><td colspan="6">ยังไม่มีบันทึกการเผยแพร่คอนเทนต์</td></tr>`;
+      return;
+    }
+    body.innerHTML = ADMIN_CONTENT_LOG.slice(0, 8).map(c => `
+      <tr>
+        <td class="cell-muted">${escapeHtml(c.date)}</td>
+        <td>${CHANNEL_ICON[c.channel] ? CHANNEL_ICON[c.channel].icon + ' ' + escapeHtml(CHANNEL_ICON[c.channel].label) : escapeHtml(c.channel)}</td>
+        <td>${badgeHtml(c.type, 'badge-info')}</td>
+        <td>${escapeHtml(c.title)}</td>
+        <td>${formatNumber(c.reach)}</td>
+        <td>${formatNumber(c.engagement)}</td>
+      </tr>`).join('');
+  }
+
+  // ---------------- บันทึกแจ้งเตือนลูกค้าล่าสุด ----------------
+  function renderNotifLog(){
+    const body = document.getElementById('notifLogBody');
+    if(ADMIN_NOTIFICATION_LOG.length === 0){
+      body.innerHTML = `<tr class="empty-row"><td colspan="4">ยังไม่มีบันทึกการแจ้งเตือน</td></tr>`;
+      return;
+    }
+    body.innerHTML = ADMIN_NOTIFICATION_LOG.slice(0, 5).map(n => `
+      <tr>
+        <td class="cell-muted">${escapeHtml(n.date)}</td>
+        <td class="cell-strong">${escapeHtml(n.orderId)}</td>
+        <td>${escapeHtml(n.customer)}</td>
+        <td>${badgeHtml(n.type, n.type === 'ขอรีวิวสินค้า' ? 'badge-gold' : 'badge-info')}</td>
+      </tr>`).join('');
+  }
+
+  // ---------------- แนวโน้มธุรกิจ / insight อัตโนมัติ ----------------
+  function renderInsights(){
+    const thisMonth = ADMIN_SALES_6M[ADMIN_SALES_6M.length - 1];
+    const prevMonth = ADMIN_SALES_6M[ADMIN_SALES_6M.length - 2];
+    const thisTotal = thisMonth.newAmount + thisMonth.secondAmount;
+    const prevTotal = prevMonth.newAmount + prevMonth.secondAmount;
+    const growth = prevTotal ? Math.round(((thisTotal - prevTotal) / prevTotal) * 100) : 0;
+
+    const newPct = Math.round((thisMonth.newAmount / thisTotal) * 100);
+
+    const typeRevenue = {};
+    ADMIN_ORDERS.filter(o => o.status !== 'ยกเลิก').forEach(o => {
+      const p = ADMIN_PRODUCTS.find(x => x.code === o.productCode);
+      const type = p ? p.type : 'อื่นๆ';
+      typeRevenue[type] = (typeRevenue[type] || 0) + o.amount;
+    });
+    const topType = Object.entries(typeRevenue).sort((a,b)=> b[1]-a[1])[0];
+
+    const channelEng = {};
+    ADMIN_CONTENT_LOG.forEach(c => { channelEng[c.channel] = (channelEng[c.channel] || 0) + c.engagement; });
+    const topChannel = Object.entries(channelEng).sort((a,b)=> b[1]-a[1])[0];
+
+    const margins = ADMIN_PRODUCTS.filter(p => p.price && p.cost).map(p => (p.price - p.cost) / p.price * 100);
+    const avgMargin = margins.length ? Math.round(margins.reduce((a,b)=>a+b,0) / margins.length) : 0;
+
+    const insights = [
+      { ic: growth >= 0 ? '&#128200;' : '&#128201;', html: `ยอดขายเดือนนี้ ${growth >= 0 ? 'เพิ่มขึ้น' : 'ลดลง'} <b>${Math.abs(growth)}%</b> เทียบกับเดือนก่อน` },
+      { ic: '&#127978;', html: `สินค้าใหม่มือ 1 ทำสัดส่วนยอดขาย <b>${newPct}%</b> ของยอดรวมเดือนนี้ ส่วนมือสองทำ <b>${100-newPct}%</b>` },
+      topType ? { ic: '&#9813;', html: `หมวดสินค้าที่ทำยอดขายสูงสุดคือ <b>${topType[0]}</b> (${formatBaht(topType[1])})` } : null,
+      topChannel ? { ic: '&#128172;', html: `ช่องทางที่มี engagement สูงสุดคือ <b>${CHANNEL_ICON[topChannel[0]] ? CHANNEL_ICON[topChannel[0]].label : topChannel[0]}</b> — ควรเน้นคอนเทนต์ช่องทางนี้ต่อ` } : null,
+      { ic: '&#128176;', html: `อัตรากำไรขั้นต้นเฉลี่ยต่อชิ้นของสินค้าที่มีข้อมูลต้นทุนอยู่ที่ประมาณ <b>${avgMargin}%</b>` },
+    ].filter(Boolean);
+
+    document.getElementById('insightList').innerHTML = insights.map(i => `
+      <div class="insight-item"><span class="ic">${i.ic}</span><div class="txt">${i.html}</div></div>
+    `).join('');
+  }
+
+  (async function init(){
+    try { await loadAdminData(); } catch(err){ showApiError(err); return; }
+    renderKpis();
+    renderTrendChart();
+    renderCatSplit();
+    renderChannelSplit();
+    renderTopProducts();
+    renderChannelStats();
+    renderContentLog();
+    renderNotifLog();
+    renderInsights();
+  })();
+</script>
+</body>
+</html>

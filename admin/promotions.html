@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>โปรโมชั่น | ระบบหลังบ้าน บ้านผ้าคุณมารวย</title>
+
+<!--
+  ==========================================================================
+  ร่างระบบหลังบ้าน — หน้าจัดการโปรโมชั่น (ตรงกับแท็บ promotions + เอกสารส่วนที่ 9.3)
+  รองรับ: ลดเปอร์เซ็นต์/บาท, ส่งฟรีเมื่อซื้อครบยอด, โค้ดส่วนลด, Flash Sale ตามช่วงเวลา
+  เมื่อบันทึกแล้วระบบจะ (ในระบบจริง) แสดงป้ายโปรฯ บนเว็บแคตตาล็อกอัตโนมัติ
+  และแจ้งเตือนลูกค้าผ่าน LINE ตามช่องทางที่เลือก
+  TODO ก่อนใช้งานจริง: เชื่อมกับแท็บ promotions ใน Google Sheet ผ่าน Apps Script
+  ==========================================================================
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/admin.css">
+</head>
+<body>
+<div class="app">
+  <div id="sidebarMount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="tb-left">
+        <button class="menu-toggle" id="menuToggleBtn" aria-label="เมนู">&#9776;</button>
+        <div>
+          <h1>โปรโมชั่น</h1>
+          <div class="breadcrumb">ระบบหลังบ้าน / โปรโมชั่น</div>
+        </div>
+      </div>
+      <div class="tb-right">
+        <div class="admin-chip"><div class="avatar">มร</div><div class="who">แอดมินร้าน</div></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="draft-banner">
+        <span class="ic">&#128274;</span>
+        <div>โปรโมชั่นที่สร้าง/แก้ไขบันทึกลงแท็บ <code>promotions</code> จริง และจะขึ้นแสดงบนเว็บหน้าร้านอัตโนมัติ (ยังไม่มีระบบแจ้งเตือนลูกค้าทาง LINE จริง)</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>รายการโปรโมชั่นทั้งหมด</h2>
+            <div class="sub"><span id="promoCount"></span></div>
+          </div>
+          <button class="btn btn-gold" id="btnAddPromo">&#10133; สร้างโปรโมชั่นใหม่</button>
+        </div>
+
+        <div class="toolbar">
+          <div class="tab-filter" id="promoStatusTabs">
+            <div class="tf-item active" data-status="all">ทั้งหมด</div>
+            <div class="tf-item" data-status="เปิดใช้งาน">เปิดใช้งาน</div>
+            <div class="tf-item" data-status="หมดอายุ">หมดอายุ</div>
+            <div class="tf-item" data-status="ปิดใช้งาน">ปิดใช้งาน</div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>รหัสโปร</th>
+                <th>ชื่อโปรโมชั่น</th>
+                <th>ประเภท / ส่วนลด</th>
+                <th>เงื่อนไข</th>
+                <th>ระยะเวลา</th>
+                <th>ช่องทาง</th>
+                <th>สถานะ</th>
+                <th>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="promotionsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= Modal: สร้าง/แก้ไขโปรโมชั่น ================= -->
+<div class="modal-overlay" id="promoModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="promoModalTitle">สร้างโปรโมชั่นใหม่</h3>
+      <button class="modal-close" onclick="closeModal('promoModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editingPromoIndex" value="-1" />
+      <div class="form-grid">
+        <div class="form-field full">
+          <label>ชื่อโปรโมชั่น *</label>
+          <input type="text" id="pName" placeholder="เช่น ลดต้อนรับสมาชิกใหม่" />
+        </div>
+
+        <div class="form-field">
+          <label>ประเภทโปรโมชั่น *</label>
+          <select id="pType">
+            <option value="เปอร์เซ็นต์">ลดเป็นเปอร์เซ็นต์</option>
+            <option value="บาท">ลดเป็นจำนวนบาท</option>
+            <option value="ส่งฟรี">ส่งฟรี</option>
+            <option value="โค้ดส่วนลด">โค้ดส่วนลด</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>ส่วนลด *</label>
+          <input type="text" id="pDiscount" placeholder="เช่น 10% หรือ ลด 200 บาท" />
+        </div>
+
+        <div class="form-field full">
+          <label>เงื่อนไข</label>
+          <input type="text" id="pCondition" placeholder="เช่น ซื้อครบ 1,000 บาท" />
+        </div>
+
+        <div class="form-field">
+          <label>วันเริ่ม *</label>
+          <input type="date" id="pStart" />
+        </div>
+        <div class="form-field">
+          <label>วันสิ้นสุด *</label>
+          <input type="date" id="pEnd" />
+        </div>
+
+        <div class="form-field full">
+          <label>ช่องทางที่แสดงโปรโมชั่น</label>
+          <div class="checkbox-group" id="pChannels">
+            <label class="checkbox-row"><input type="checkbox" value="เว็บ" checked /> &#127760; เว็บแคตตาล็อก</label>
+            <label class="checkbox-row"><input type="checkbox" value="LINE" checked /> &#128172; LINE OA</label>
+            <label class="checkbox-row"><input type="checkbox" value="เพจบ้านผ้าคุณมารวย" /> &#128240; เพจบ้านผ้าคุณมารวย</label>
+            <label class="checkbox-row"><input type="checkbox" value="เพจไหมใหม่ไม่ใหม่" /> &#128240; เพจไหมใหม่ไม่ใหม่</label>
+          </div>
+        </div>
+
+        <div class="form-field full">
+          <label class="checkbox-row">
+            <input type="checkbox" id="pActive" checked />
+            <span>เปิดใช้งานโปรโมชั่นนี้ทันที</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('promoModal')">ยกเลิก</button>
+      <button class="btn btn-gold" id="btnSavePromo">บันทึกโปรโมชั่น</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/admin-data.js"></script>
+<script src="assets/admin.js"></script>
+<script src="../config.js"></script>
+<script src="assets/api.js"></script>
+<script>
+  requireLogin();
+  renderSidebar('promotions');
+
+  let currentPromoStatusFilter = 'all';
+
+  function effectiveStatus(p){
+    if(p.status === 'ปิดใช้งาน') return 'ปิดใช้งาน';
+    const today = new Date().toISOString().slice(0,10);
+    if(p.end < today) return 'หมดอายุ';
+    return 'เปิดใช้งาน';
+  }
+
+  function promoRowHtml(p, idx){
+    const status = effectiveStatus(p);
+    const isFlash = p.end === p.start && status === 'เปิดใช้งาน';
+    return `
+      <tr>
+        <td class="cell-strong">${escapeHtml(p.code)}</td>
+        <td>${escapeHtml(p.name)}${isFlash ? ' <span class="badge badge-gold">&#9889; Flash Sale</span>' : ''}</td>
+        <td>${escapeHtml(p.type)}<div class="cell-muted">${escapeHtml(p.discount)}</div></td>
+        <td>${p.condition ? escapeHtml(p.condition) : '<span class="cell-muted">-</span>'}</td>
+        <td class="cell-muted">${escapeHtml(p.start)} &rarr; ${escapeHtml(p.end)}</td>
+        <td class="cell-muted">${escapeHtml(p.channel)}</td>
+        <td>${badgeHtml(status, PROMO_STATUS_BADGE[status] || 'badge-gray')}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn btn-outline btn-sm btn-icon" title="แก้ไข" onclick="editPromo(${idx})">&#9999;&#65039;</button>
+            <button class="btn btn-danger-outline btn-sm btn-icon" title="ปิดใช้งาน" onclick="togglePromoActive(${idx})">&#128683;</button>
+          </div>
+        </td>
+      </tr>`;
+  }
+
+  function renderPromotionsTable(){
+    const rows = ADMIN_PROMOTIONS
+      .map((p, idx) => ({ p, idx }))
+      .filter(({p}) => currentPromoStatusFilter === 'all' || effectiveStatus(p) === currentPromoStatusFilter);
+
+    document.getElementById('promoCount').textContent = `ทั้งหมด ${ADMIN_PROMOTIONS.length} โปรโมชั่น · แสดง ${rows.length} รายการ`;
+
+    const body = document.getElementById('promotionsBody');
+    if(rows.length === 0){
+      body.innerHTML = `<tr class="empty-row"><td colspan="8">ไม่พบโปรโมชั่นที่ตรงกับเงื่อนไข</td></tr>`;
+      return;
+    }
+    body.innerHTML = rows.map(({p, idx}) => promoRowHtml(p, idx)).join('');
+  }
+
+  document.querySelectorAll('#promoStatusTabs .tf-item').forEach(tab => {
+    tab.addEventListener('click', () => {
+      currentPromoStatusFilter = tab.dataset.status;
+      document.querySelectorAll('#promoStatusTabs .tf-item').forEach(t => t.classList.toggle('active', t === tab));
+      renderPromotionsTable();
+    });
+  });
+
+  async function togglePromoActive(idx){
+    const p = ADMIN_PROMOTIONS[idx];
+    try {
+      const result = await apiCall('promotion.toggleActive', { code: p.code });
+      await loadAdminData();
+      renderPromotionsTable();
+      showToast(result.status === 'ปิดใช้งาน' ? `ปิดใช้งานโปรโมชั่น "${p.name}" แล้ว` : `เปิดใช้งานโปรโมชั่น "${p.name}" อีกครั้งแล้ว`, '&#127991;&#65039;');
+    } catch(err){ showApiError(err); }
+  }
+
+  function openAddPromoModal(){
+    document.getElementById('editingPromoIndex').value = -1;
+    document.getElementById('promoModalTitle').textContent = 'สร้างโปรโมชั่นใหม่';
+    document.getElementById('pName').value = '';
+    document.getElementById('pType').value = 'เปอร์เซ็นต์';
+    document.getElementById('pDiscount').value = '';
+    document.getElementById('pCondition').value = '';
+    const today = new Date().toISOString().slice(0,10);
+    document.getElementById('pStart').value = today;
+    document.getElementById('pEnd').value = today;
+    document.querySelectorAll('#pChannels input').forEach(cb => cb.checked = (cb.value === 'เว็บ' || cb.value === 'LINE'));
+    document.getElementById('pActive').checked = true;
+    openModal('promoModal');
+  }
+  document.getElementById('btnAddPromo').addEventListener('click', openAddPromoModal);
+  if(new URLSearchParams(location.search).get('new') === '1'){ openAddPromoModal(); }
+
+  function editPromo(idx){
+    const p = ADMIN_PROMOTIONS[idx];
+    document.getElementById('editingPromoIndex').value = idx;
+    document.getElementById('promoModalTitle').textContent = 'แก้ไขโปรโมชั่น: ' + p.name;
+    document.getElementById('pName').value = p.name;
+    document.getElementById('pType').value = p.type;
+    document.getElementById('pDiscount').value = p.discount;
+    document.getElementById('pCondition').value = p.condition;
+    document.getElementById('pStart').value = p.start;
+    document.getElementById('pEnd').value = p.end;
+    const channels = p.channel.split(' + ');
+    document.querySelectorAll('#pChannels input').forEach(cb => cb.checked = channels.some(c => c.includes(cb.value) || cb.value.includes(c)));
+    document.getElementById('pActive').checked = p.status !== 'ปิดใช้งาน';
+    openModal('promoModal');
+  }
+
+  document.getElementById('btnSavePromo').addEventListener('click', async function(){
+    const name = document.getElementById('pName').value.trim();
+    const discount = document.getElementById('pDiscount').value.trim();
+    const start = document.getElementById('pStart').value;
+    const end = document.getElementById('pEnd').value;
+    if(!name || !discount || !start || !end){
+      alert('กรุณากรอกชื่อโปรโมชั่น ส่วนลด และวันที่ให้ครบถ้วน');
+      return;
+    }
+    const type = document.getElementById('pType').value;
+    const condition = document.getElementById('pCondition').value.trim();
+    const channels = Array.from(document.querySelectorAll('#pChannels input:checked')).map(cb => cb.value);
+    const status = document.getElementById('pActive').checked ? 'เปิดใช้งาน' : 'ปิดใช้งาน';
+    const idx = Number(document.getElementById('editingPromoIndex').value);
+    const btn = document.getElementById('btnSavePromo');
+    btn.disabled = true;
+    try {
+      if(idx >= 0){
+        const code = ADMIN_PROMOTIONS[idx].code;
+        await apiCall('promotion.update', { code, name, type, discount, condition, start, end, channel: channels.join(' + '), status });
+        await loadAdminData();
+        showToast('บันทึกการแก้ไขโปรโมชั่นเรียบร้อย', '&#9989;');
+      } else {
+        await apiCall('promotion.create', { name, type, discount, condition, start, end, channel: channels.join(' + '), status });
+        await loadAdminData();
+        showToast('สร้างโปรโมชั่นใหม่เรียบร้อย จะขึ้นป้ายบนเว็บตามช่องทางที่เลือก', '&#127991;&#65039;');
+      }
+      closeModal('promoModal');
+      renderPromotionsTable();
+    } catch(err){ showApiError(err); } finally { btn.disabled = false; }
+  });
+
+  (async function init(){
+    try { await loadAdminData(); } catch(err){ showApiError(err); return; }
+    renderPromotionsTable();
+  })();
+</script>
+</body>
+</html>

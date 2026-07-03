@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>จัดการสินค้า | ระบบหลังบ้าน บ้านผ้าคุณมารวย</title>
+
+<!--
+  ==========================================================================
+  ร่างระบบหลังบ้าน — หน้าจัดการสินค้า (ตรงกับเอกสารส่วนที่ 9.1)
+  แอดมินกรอกข้อมูล + สเปกเฉพาะตามหมวด + ต้นทุน + อัปโหลดรูปครั้งเดียว
+  แล้วเลือกปลายทางเผยแพร่ (LINE OA / เพจ 2 เพจ / เว็บแคตตาล็อก) กดเผยแพร่ครั้งเดียว
+  TODO ก่อนใช้งานจริง:
+  1) เชื่อมฟอร์มกับ Google Apps Script Web App เพื่อบันทึกลงแท็บ products จริง
+  2) เชื่อมอัปโหลดรูปกับคลังภาพกลาง (Cloudinary) + ติดลายน้ำอัตโนมัติตามหมวด
+  3) เชื่อมปุ่ม "เผยแพร่" กับ Facebook Graph API และ LINE Messaging API จริง
+  4) ข้อมูลที่เพิ่ม/แก้ไขในหน้านี้อยู่ในหน่วยความจำเบราว์เซอร์เท่านั้น
+     (รีเฟรชหน้าแล้วจะกลับเป็นข้อมูลตัวอย่างเดิม)
+  5) ฟิลด์สเปกของหมวด "ผ้าไหมกรอบรูปที่ระลึก" และ "ผ้าพันคอ/คลุมไหล่" ยังใช้
+     แบบฟอร์มผ้าไหมทั่วไปเป็นค่าเริ่มต้น รอผู้ใช้ยืนยันฟิลด์ที่ต้องการจริง
+  ==========================================================================
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/admin.css">
+</head>
+<body>
+<div class="app">
+  <div id="sidebarMount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="tb-left">
+        <button class="menu-toggle" id="menuToggleBtn" aria-label="เมนู">&#9776;</button>
+        <div>
+          <h1>จัดการสินค้า</h1>
+          <div class="breadcrumb">ระบบหลังบ้าน / จัดการสินค้า</div>
+        </div>
+      </div>
+      <div class="tb-right">
+        <div class="admin-chip"><div class="avatar">มร</div><div class="who">แอดมินร้าน</div></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="draft-banner">
+        <span class="ic">&#128274;</span>
+        <div>การเพิ่ม/แก้ไข/ลบสินค้าบันทึกลงแท็บ <code>products</code> ใน Google Sheets จริงแล้ว (ยังไม่เชื่อมอัปโหลดรูปจริง — ดูข้อ 6 ในคู่มือติดตั้ง)</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>รายการสินค้าทั้งหมด</h2>
+            <div class="sub"><span id="productCount"></span></div>
+          </div>
+          <button class="btn btn-gold" id="btnAddProduct">&#10133; เพิ่มสินค้าใหม่</button>
+        </div>
+
+        <div class="toolbar">
+          <div class="search-box">
+            <span>&#128269;</span>
+            <input type="text" id="searchInput" placeholder="ค้นหาชื่อสินค้า หรือรหัสสินค้า..." />
+          </div>
+          <select class="select-filter" id="filterMainCat">
+            <option value="all">ทุกหมวดหลัก</option>
+            <option value="new">สินค้าใหม่ มือ 1</option>
+            <option value="second">สินค้ามือสอง</option>
+          </select>
+          <select class="select-filter" id="filterStatus">
+            <option value="all">ทุกสถานะ</option>
+            <option value="คงเหลือ">คงเหลือ</option>
+            <option value="มีคนจอง">มีคนจอง</option>
+            <option value="ของหมด">ของหมด</option>
+            <option value="ขายแล้ว">ขายแล้ว</option>
+          </select>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table" style="min-width:1080px;">
+            <thead>
+              <tr>
+                <th>รหัสสินค้า</th>
+                <th>ชื่อสินค้า</th>
+                <th>หมวดหลัก / ประเภท</th>
+                <th>สเปกสินค้า</th>
+                <th>ราคาขาย / ต้นทุน</th>
+                <th>กำไรต่อชิ้น</th>
+                <th>คงเหลือ</th>
+                <th>สถานะ</th>
+                <th>เผยแพร่ที่</th>
+                <th>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="productsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= Modal: เพิ่ม/แก้ไขสินค้า ================= -->
+<div class="modal-overlay" id="productModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="productModalTitle">เพิ่มสินค้าใหม่</h3>
+      <button class="modal-close" onclick="closeModal('productModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editingCode" value="" />
+
+      <!-- ข้อมูลหลัก -->
+      <div class="form-grid">
+        <div class="form-field full">
+          <label>ชื่อสินค้า (สร้างอัตโนมัติจากสเปกที่กรอกด้านล่าง)</label>
+          <div id="fNamePreview" class="cell-strong" style="padding:10px 13px; background:var(--cream); border:1px solid var(--border); border-radius:10px; min-height:42px; display:flex; align-items:center;">กรุณาเลือกประเภทและกรอกสเปกด้านล่าง</div>
+          <input type="hidden" id="fName" />
+        </div>
+
+        <div class="form-field">
+          <label>หมวดหลัก *</label>
+          <select id="fMainCat">
+            <option value="new">สินค้าใหม่ มือ 1</option>
+            <option value="second">สินค้ามือสอง</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>ประเภทสินค้า *</label>
+          <select id="fType"></select>
+          <div class="hint">รายการอ่านจากหมวดหมู่ที่ตั้งไว้ในหน้า &ldquo;หมวดหมู่สินค้า&rdquo;</div>
+        </div>
+
+        <div class="form-field">
+          <label>ราคาขาย (บาท) *</label>
+          <input type="number" id="fPrice" min="0" placeholder="เช่น 3900" oninput="updateMarginPreview()" />
+        </div>
+        <div class="form-field">
+          <label>ต้นทุนสินค้า (บาท) *</label>
+          <input type="number" id="fCost" min="0" placeholder="เช่น 2100" oninput="updateMarginPreview()" />
+          <div class="hint" id="marginPreview">กรอกราคาขายและต้นทุนเพื่อดูอัตรากำไรโดยประมาณ</div>
+        </div>
+
+        <div class="form-field">
+          <label>จำนวนคงเหลือ *</label>
+          <input type="number" id="fStock" min="0" placeholder="เช่น 5" />
+        </div>
+        <div class="form-field">
+          <label>สถานะสินค้า *</label>
+          <select id="fStatus">
+            <option value="คงเหลือ">คงเหลือ</option>
+            <option value="มีคนจอง">มีคนจอง</option>
+            <option value="ของหมด">ของหมด</option>
+            <option value="ขายแล้ว">ขายแล้ว</option>
+          </select>
+          <div class="hint">เลือกสถานะจริงของสินค้า เช่น จองแล้ว/ขายแล้ว โดยไม่ถูกคำนวณทับจากจำนวนคงเหลือ</div>
+        </div>
+      </div>
+
+      <!-- สเปกสินค้า (ไดนามิกตามประเภท) -->
+      <div class="mt-16" style="border-top:1px dashed var(--border); padding-top:16px;">
+        <label style="font-size:13px; font-weight:700; color:var(--brown-deep);">สเปกสินค้า (ตามประเภทที่เลือก)</label>
+        <div class="form-grid mt-8" id="specFieldsContainer"></div>
+      </div>
+
+      <!-- รูปภาพ / ไฮไลท์ / ปลายทางเผยแพร่ -->
+      <div class="form-grid mt-16">
+        <div class="form-field full">
+          <label>รูปภาพสินค้า</label>
+          <div class="upload-box">
+            <div class="ic">&#128247;</div>
+            อัปโหลดรูปสินค้า (ตัวอย่าง — ยังไม่เชื่อมคลังภาพจริง)<br>
+            <span class="hint">ระบบจะติดลายน้ำอัตโนมัติตามหมวด: มือ 1 ใช้ลายน้ำ &ldquo;บ้านผ้าคุณมารวย&rdquo;, มือ 2 ใช้ลายน้ำ &ldquo;ไหมใหม่ไม่ใหม่&rdquo;</span>
+            <div class="mt-16"><input type="file" accept="image/*" multiple /></div>
+          </div>
+        </div>
+
+        <div class="form-field full">
+          <label class="checkbox-row">
+            <input type="checkbox" id="fHighlight" />
+            <span>&#9813; ปักหมุดไฮไลท์บนเว็บ (แสดงเด่นพร้อมป้ายพรีเมี่ยม)</span>
+          </label>
+          <div class="hint">ใช้กับสินค้าใหม่มือ 1 หมวด &ldquo;ผ้าไหมพรีเมี่ยม&rdquo; หรือสินค้าที่ต้องการปักหมุดพิเศษ</div>
+        </div>
+
+        <div class="form-field full">
+          <label>เลือกปลายทางเผยแพร่</label>
+          <div class="checkbox-group" id="fChannels">
+            <label class="checkbox-row"><input type="checkbox" value="web" checked /> &#127760; เว็บแคตตาล็อก</label>
+            <label class="checkbox-row"><input type="checkbox" value="line" /> &#128172; LINE OA</label>
+            <label class="checkbox-row"><input type="checkbox" value="fb1" /> &#128240; เพจบ้านผ้าคุณมารวย</label>
+            <label class="checkbox-row"><input type="checkbox" value="fb2" /> &#128240; เพจไหมใหม่ไม่ใหม่</label>
+          </div>
+          <div class="hint">เลือกได้หลายช่องทาง ระบบจะบันทึกสถิติการเผยแพร่ไว้ในหน้า &ldquo;วิเคราะห์ผลงาน&rdquo;</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('productModal')">ยกเลิก</button>
+      <button class="btn btn-gold" id="btnPublishProduct">&#128228; เผยแพร่สินค้า</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/admin-data.js"></script>
+<script src="assets/admin.js"></script>
+<script src="../config.js"></script>
+<script src="assets/api.js"></script>
+<script>
+  requireLogin();
+  renderSidebar('products');
+
+  let currentEditIndex = -1;
+  let currentEditCode = '';
+
+  function categoryOptionsFor(mainCat){
+    return ADMIN_CATEGORIES
+      .filter(c => c.mainCat === mainCat && c.status === "เปิด")
+      .sort((a,b)=> a.order - b.order);
+  }
+
+  function refreshTypeOptions(){
+    const mainCat = document.getElementById('fMainCat').value;
+    const typeSelect = document.getElementById('fType');
+    const opts = categoryOptionsFor(mainCat);
+    typeSelect.innerHTML = opts.map(c => `<option value="${safeAttr(c.name)}" data-highlight="${c.highlight}">${c.highlight ? '&#9813; ' : ''}${escapeHtml(c.name)}</option>`).join('');
+  }
+
+  function renderSpecFields(){
+    const type = document.getElementById('fType').value;
+    document.getElementById('specFieldsContainer').innerHTML = specFieldsHtml(type);
+    updateNamePreview();
+  }
+
+  function updateNamePreview(){
+    const type = document.getElementById('fType').value;
+    const spec = collectSpecFromForm(type);
+    const name = composeProductName(type, spec);
+    const preview = document.getElementById('fNamePreview');
+    document.getElementById('fName').value = name;
+    preview.textContent = name || 'กรุณาเลือกประเภทและกรอกสเปกด้านล่าง';
+  }
+
+  // ฟังทุกการเปลี่ยนแปลงในฟิลด์สเปก (ลาย/สี/ขนาด/ไซซ์/ตำหนิ ฯลฯ) เพื่ออัปเดตชื่อสินค้าอัตโนมัติแบบเรียลไทม์
+  document.getElementById('specFieldsContainer').addEventListener('input', updateNamePreview);
+  document.getElementById('specFieldsContainer').addEventListener('change', updateNamePreview);
+
+  function updateMarginPreview(){
+    const price = Number(document.getElementById('fPrice').value) || 0;
+    const cost = Number(document.getElementById('fCost').value) || 0;
+    const el = document.getElementById('marginPreview');
+    if(!price){ el.textContent = 'กรอกราคาขายและต้นทุนเพื่อดูอัตรากำไรโดยประมาณ'; return; }
+    const profit = price - cost;
+    const margin = Math.round((profit / price) * 100);
+    el.textContent = `กำไรโดยประมาณ ${formatNumber(profit)} บาท/ชิ้น (${margin}%)`;
+  }
+
+  document.getElementById('fMainCat').addEventListener('change', function(){
+    refreshTypeOptions();
+    renderSpecFields();
+  });
+  document.getElementById('fType').addEventListener('change', function(){
+    const opt = this.options[this.selectedIndex];
+    if(opt && opt.dataset.highlight === 'true'){ document.getElementById('fHighlight').checked = true; }
+    renderSpecFields();
+  });
+
+  function marginBadge(price, cost){
+    if(!price) return '<span class="cell-muted">-</span>';
+    const profit = price - (cost || 0);
+    const margin = Math.round((profit / price) * 100);
+    const cls = margin >= 40 ? 'badge-ok' : (margin >= 20 ? 'badge-warn' : 'badge-danger');
+    return `${badgeHtml('+' + formatNumber(profit) + ' บาท', cls)}<div class="cell-muted">${margin}%</div>`;
+  }
+
+  function productRowHtml(p, idx){
+    const channels = (p.publishedTo || []).map(c => `<span title="${safeAttr(CHANNEL_ICON[c] ? CHANNEL_ICON[c].label : c)}">${CHANNEL_ICON[c] ? CHANNEL_ICON[c].icon : ''}</span>`).join(' ');
+    return `
+      <tr>
+        <td class="cell-strong">${escapeHtml(p.code)}${p.highlight ? ' <span class="badge badge-gold">&#9813;</span>' : ''}</td>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${p.mainCat === 'new' ? 'สินค้าใหม่ มือ 1' : 'สินค้ามือสอง'}<div class="cell-muted">${escapeHtml(p.type)}</div></td>
+        <td>${specSummaryHtml(p.spec)}</td>
+        <td>${formatBaht(p.price)}<div class="cell-muted">ทุน ${formatBaht(p.cost || 0)}</div></td>
+        <td>${marginBadge(p.price, p.cost)}</td>
+        <td>${p.stock} ชิ้น</td>
+        <td>${badgeHtml(p.status, PRODUCT_STATUS_BADGE[p.status] || 'badge-gray')}</td>
+        <td>${channels || '<span class="cell-muted">-</span>'}</td>
+        <td>
+          <div class="row-actions">
+            <button class="btn btn-outline btn-sm btn-icon" title="แก้ไข" onclick="editProduct(${idx})">&#9999;&#65039;</button>
+            <button class="btn btn-danger-outline btn-sm btn-icon" title="ลบ" onclick="deleteProduct(${idx})">&#128465;&#65039;</button>
+          </div>
+        </td>
+      </tr>`;
+  }
+
+  function renderProductsTable(){
+    const q = document.getElementById('searchInput').value.trim().toLowerCase();
+    const fMain = document.getElementById('filterMainCat').value;
+    const fStatus = document.getElementById('filterStatus').value;
+
+    const filtered = ADMIN_PRODUCTS
+      .map((p, idx) => ({ p, idx }))
+      .filter(({p}) => {
+        const matchQ = !q || p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q);
+        const matchMain = fMain === 'all' || p.mainCat === fMain;
+        const matchStatus = fStatus === 'all' || p.status === fStatus;
+        return matchQ && matchMain && matchStatus;
+      });
+
+    document.getElementById('productCount').textContent = `ทั้งหมด ${ADMIN_PRODUCTS.length} รายการ · แสดง ${filtered.length} รายการ`;
+
+    const body = document.getElementById('productsBody');
+    if(filtered.length === 0){
+      body.innerHTML = `<tr class="empty-row"><td colspan="10">ไม่พบสินค้าที่ตรงกับเงื่อนไข</td></tr>`;
+      return;
+    }
+    body.innerHTML = filtered.map(({p, idx}) => productRowHtml(p, idx)).join('');
+  }
+
+  ['searchInput'].forEach(id => document.getElementById(id).addEventListener('input', renderProductsTable));
+  ['filterMainCat','filterStatus'].forEach(id => document.getElementById(id).addEventListener('change', renderProductsTable));
+
+  function openAddModal(){
+    currentEditIndex = -1;
+    document.getElementById('productModalTitle').textContent = 'เพิ่มสินค้าใหม่';
+    document.getElementById('editingCode').value = '';
+    document.getElementById('fMainCat').value = 'new';
+    refreshTypeOptions();
+    document.getElementById('fPrice').value = '';
+    document.getElementById('fCost').value = '';
+    document.getElementById('fStock').value = '';
+    document.getElementById('fStatus').value = 'คงเหลือ';
+    document.getElementById('fHighlight').checked = false;
+    document.querySelectorAll('#fChannels input').forEach(cb => cb.checked = (cb.value === 'web'));
+    renderSpecFields();
+    updateMarginPreview();
+    openModal('productModal');
+  }
+  document.getElementById('btnAddProduct').addEventListener('click', openAddModal);
+  if(new URLSearchParams(location.search).get('new') === '1'){ openAddModal(); }
+
+  function editProduct(idx){
+    currentEditIndex = idx;
+    const p = ADMIN_PRODUCTS[idx];
+    currentEditCode = p.code;
+    document.getElementById('productModalTitle').textContent = 'แก้ไขสินค้า: ' + p.code;
+    document.getElementById('editingCode').value = p.code;
+    document.getElementById('fMainCat').value = p.mainCat;
+    refreshTypeOptions();
+    document.getElementById('fType').value = p.type;
+    document.getElementById('fPrice').value = p.price;
+    document.getElementById('fCost').value = p.cost || '';
+    document.getElementById('fStock').value = p.stock;
+    document.getElementById('fStatus').value = p.status || 'คงเหลือ';
+    document.getElementById('fHighlight').checked = !!p.highlight;
+    const publishedTo = p.publishedTo || [];
+    document.querySelectorAll('#fChannels input').forEach(cb => cb.checked = publishedTo.includes(cb.value));
+    renderSpecFields();
+    fillSpecToForm(p.type, p.spec);
+    updateNamePreview();
+    updateMarginPreview();
+    openModal('productModal');
+  }
+
+  async function deleteProduct(idx){
+    const p = ADMIN_PRODUCTS[idx];
+    if(!confirm(`ยืนยันลบสินค้า "${p.name}" (${p.code}) ?`)) return;
+    try {
+      await apiCall('product.delete', { code: p.code });
+      await loadAdminData();
+      renderProductsTable();
+      showToast('ลบสินค้าเรียบร้อย', '&#128465;&#65039;');
+    } catch(err){ showApiError(err); }
+  }
+
+  document.getElementById('btnPublishProduct').addEventListener('click', async function(){
+    updateNamePreview();
+    const name = document.getElementById('fName').value.trim();
+    const price = Number(document.getElementById('fPrice').value);
+    const cost = Number(document.getElementById('fCost').value) || 0;
+    const stock = Number(document.getElementById('fStock').value || 0);
+    if(!name || !price){
+      alert('กรุณาเลือกประเภทสินค้า กรอกสเปกให้เพียงพอสำหรับสร้างชื่อ และกรอกราคาขายให้ครบถ้วน');
+      return;
+    }
+    const mainCat = document.getElementById('fMainCat').value;
+    const type = document.getElementById('fType').value;
+    const status = document.getElementById('fStatus').value;
+    const highlight = document.getElementById('fHighlight').checked;
+    const channels = Array.from(document.querySelectorAll('#fChannels input:checked')).map(cb => cb.value);
+    const spec = collectSpecFromForm(type);
+
+    const btn = document.getElementById('btnPublishProduct');
+    btn.disabled = true;
+    try {
+      if(currentEditIndex >= 0){
+        await apiCall('product.update', { code: currentEditCode, name, mainCat, type, price, cost, stock, status, highlight, publishedTo: channels, spec });
+        await loadAdminData();
+        closeModal('productModal');
+        renderProductsTable();
+        showToast('บันทึกการแก้ไขสินค้าเรียบร้อย', '&#9989;');
+      } else {
+        await apiCall('product.create', { name, mainCat, type, price, cost, stock, status, highlight, publishedTo: channels, spec });
+        await loadAdminData();
+        closeModal('productModal');
+        renderProductsTable();
+        showToast('เผยแพร่สินค้าใหม่เรียบร้อย และบันทึกสถิติการเผยแพร่แล้ว', '&#128228;');
+      }
+    } catch(err){ showApiError(err); } finally { btn.disabled = false; }
+  });
+
+  (async function init(){
+    try { await loadAdminData(); } catch(err){ showApiError(err); return; }
+    refreshTypeOptions();
+    renderSpecFields();
+    renderProductsTable();
+  })();
+</script>
+</body>
+</html>

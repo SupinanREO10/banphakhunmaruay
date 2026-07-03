@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>หมวดหมู่สินค้า | ระบบหลังบ้าน บ้านผ้าคุณมารวย</title>
+
+<!--
+  ==========================================================================
+  ร่างระบบหลังบ้าน — หน้าจัดการหมวดหมู่สินค้า (ตรงกับเอกสารส่วนที่ 9.2.1)
+  ออกแบบให้ "ประเภทสินค้า" เป็นข้อมูล ไม่ใช่ค่าตายตัวในโค้ด แอดมินเพิ่มหมวดใหม่
+  ได้เอง = เพิ่มหนึ่งแถว, ปิดหมวดที่ไม่ใช้ได้โดยไม่ต้องลบข้อมูลเก่า,
+  ตั้ง "ไฮไลท์บนเว็บ" ให้หมวดใดหมวดหนึ่งถูกปักหมุด/แสดงเด่นเสมอ (เช่น ผ้าไหมพรีเมี่ยม)
+  TODO ก่อนใช้งานจริง: เชื่อมกับแท็บ categories ใน Google Sheet ผ่าน Apps Script
+  ==========================================================================
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@400;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/admin.css">
+</head>
+<body>
+<div class="app">
+  <div id="sidebarMount"></div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="tb-left">
+        <button class="menu-toggle" id="menuToggleBtn" aria-label="เมนู">&#9776;</button>
+        <div>
+          <h1>หมวดหมู่สินค้า</h1>
+          <div class="breadcrumb">ระบบหลังบ้าน / หมวดหมู่สินค้า</div>
+        </div>
+      </div>
+      <div class="tb-right">
+        <div class="admin-chip"><div class="avatar">มร</div><div class="who">แอดมินร้าน</div></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="draft-banner">
+        <span class="ic">&#128274;</span>
+        <div>เพิ่มหมวดใหม่ = เพิ่มหนึ่งแถวในแท็บ <code>categories</code> บน Google Sheets จริง เว็บแคตตาล็อกจะอ่านรายการจากที่นี่โดยตรง</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>รายการหมวดหมู่ทั้งหมด</h2>
+            <div class="sub"><span id="catCount"></span></div>
+          </div>
+          <button class="btn btn-gold" id="btnAddCategory">&#10133; เพิ่มหมวดหมู่</button>
+        </div>
+
+        <div class="toolbar">
+          <div class="tab-filter" id="mainCatTabs">
+            <div class="tf-item active" data-main="all">ทั้งหมด</div>
+            <div class="tf-item" data-main="new">A) สินค้าใหม่ มือ 1</div>
+            <div class="tf-item" data-main="second">B) สินค้ามือ 2</div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>รหัส</th>
+                <th>หมวดหลัก</th>
+                <th>ชื่อประเภท</th>
+                <th>ลำดับแสดง</th>
+                <th>ไฮไลท์บนเว็บ</th>
+                <th>สถานะ</th>
+                <th>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="categoriesBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= Modal: เพิ่ม/แก้ไขหมวดหมู่ ================= -->
+<div class="modal-overlay" id="categoryModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-head">
+      <h3 id="categoryModalTitle">เพิ่มหมวดหมู่ใหม่</h3>
+      <button class="modal-close" onclick="closeModal('categoryModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editingCatIndex" value="-1" />
+      <div class="form-grid">
+        <div class="form-field full">
+          <label>หมวดหลัก *</label>
+          <select id="cMainCat">
+            <option value="new">A) สินค้าใหม่ มือ 1</option>
+            <option value="second">B) สินค้ามือ 2</option>
+          </select>
+        </div>
+        <div class="form-field full">
+          <label>ชื่อประเภท *</label>
+          <input type="text" id="cName" placeholder="เช่น ผ้าไหมพรีเมี่ยม" />
+        </div>
+        <div class="form-field">
+          <label>ลำดับแสดง *</label>
+          <input type="number" id="cOrder" min="1" placeholder="เช่น 1" />
+          <div class="hint">เลขน้อยแสดงก่อน</div>
+        </div>
+        <div class="form-field">
+          <label>สถานะ</label>
+          <select id="cStatus">
+            <option value="เปิด">เปิด</option>
+            <option value="ปิด">ปิด</option>
+          </select>
+        </div>
+        <div class="form-field full">
+          <label class="checkbox-row">
+            <input type="checkbox" id="cHighlight" />
+            <span>&#9813; ไฮไลท์บนเว็บ (ปักหมุด/แสดงเด่นเสมอ)</span>
+          </label>
+          <div class="hint">เหมาะกับหมวดพิเศษ เช่น &ldquo;ผ้าไหมพรีเมี่ยม&rdquo; — สินค้าในหมวดนี้จะถูกปักหมุดไว้บนสุดของหน้าแคตตาล็อกอัตโนมัติ</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeModal('categoryModal')">ยกเลิก</button>
+      <button class="btn btn-gold" id="btnSaveCategory">บันทึกหมวดหมู่</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/admin-data.js"></script>
+<script src="assets/admin.js"></script>
+<script src="../config.js"></script>
+<script src="assets/api.js"></script>
+<script>
+  requireLogin();
+  renderSidebar('categories');
+
+  let currentMainFilter = 'all';
+
+  function categoryRowHtml(c, idx){
+    return `
+      <tr>
+        <td class="cell-strong">${escapeHtml(c.code)}</td>
+        <td>${c.mainCat === 'new' ? 'A) สินค้าใหม่ มือ 1' : 'B) สินค้ามือ 2'}</td>
+        <td>${c.highlight ? '&#9813; ' : ''}${escapeHtml(c.name)}</td>
+        <td>${c.order}</td>
+        <td>
+          <label class="switch">
+            <input type="checkbox" ${c.highlight ? 'checked' : ''} onchange="toggleHighlight(${idx}, this.checked)" />
+            <span class="slider"></span>
+          </label>
+        </td>
+        <td>
+          <label class="switch">
+            <input type="checkbox" ${c.status === 'เปิด' ? 'checked' : ''} onchange="toggleStatus(${idx}, this.checked)" />
+            <span class="slider"></span>
+          </label>
+        </td>
+        <td>
+          <div class="row-actions">
+            <button class="btn btn-outline btn-sm btn-icon" title="แก้ไข" onclick="editCategory(${idx})">&#9999;&#65039;</button>
+          </div>
+        </td>
+      </tr>`;
+  }
+
+  function renderCategoriesTable(){
+    const rows = ADMIN_CATEGORIES
+      .map((c, idx) => ({ c, idx }))
+      .filter(({c}) => currentMainFilter === 'all' || c.mainCat === currentMainFilter)
+      .sort((a,b)=> a.c.mainCat === b.c.mainCat ? a.c.order - b.c.order : (a.c.mainCat === 'new' ? -1 : 1));
+
+    document.getElementById('catCount').textContent = `ทั้งหมด ${ADMIN_CATEGORIES.length} หมวด · แสดง ${rows.length} หมวด`;
+
+    const body = document.getElementById('categoriesBody');
+    if(rows.length === 0){
+      body.innerHTML = `<tr class="empty-row"><td colspan="7">ยังไม่มีหมวดหมู่ในตัวกรองนี้</td></tr>`;
+      return;
+    }
+    body.innerHTML = rows.map(({c, idx}) => categoryRowHtml(c, idx)).join('');
+  }
+
+  document.querySelectorAll('#mainCatTabs .tf-item').forEach(tab => {
+    tab.addEventListener('click', () => {
+      currentMainFilter = tab.dataset.main;
+      document.querySelectorAll('#mainCatTabs .tf-item').forEach(t => t.classList.toggle('active', t === tab));
+      renderCategoriesTable();
+    });
+  });
+
+  async function toggleHighlight(idx, checked){
+    const c = ADMIN_CATEGORIES[idx];
+    try {
+      await apiCall('category.toggleHighlight', { code: c.code, value: checked });
+      await loadAdminData();
+      renderCategoriesTable();
+      showToast(checked ? 'ตั้งไฮไลท์หมวดนี้แล้ว จะปักหมุดบนเว็บอัตโนมัติ' : 'ยกเลิกไฮไลท์หมวดนี้แล้ว', '&#9813;');
+    } catch(err){ showApiError(err); renderCategoriesTable(); }
+  }
+  async function toggleStatus(idx, checked){
+    const c = ADMIN_CATEGORIES[idx];
+    try {
+      await apiCall('category.toggleStatus', { code: c.code, value: checked });
+      await loadAdminData();
+      renderCategoriesTable();
+      showToast(checked ? 'เปิดใช้งานหมวดนี้แล้ว' : 'ปิดหมวดนี้แล้ว (ไม่ลบข้อมูลเดิม)', checked ? '&#9989;' : '&#128683;');
+    } catch(err){ showApiError(err); renderCategoriesTable(); }
+  }
+
+  function openAddCategoryModal(){
+    document.getElementById('editingCatIndex').value = -1;
+    document.getElementById('categoryModalTitle').textContent = 'เพิ่มหมวดหมู่ใหม่';
+    document.getElementById('cMainCat').value = 'new';
+    document.getElementById('cName').value = '';
+    document.getElementById('cOrder').value = ADMIN_CATEGORIES.filter(c=>c.mainCat==='new').length + 1;
+    document.getElementById('cStatus').value = 'เปิด';
+    document.getElementById('cHighlight').checked = false;
+    openModal('categoryModal');
+  }
+  document.getElementById('btnAddCategory').addEventListener('click', openAddCategoryModal);
+  if(new URLSearchParams(location.search).get('new') === '1'){ openAddCategoryModal(); }
+
+  function editCategory(idx){
+    const c = ADMIN_CATEGORIES[idx];
+    document.getElementById('editingCatIndex').value = idx;
+    document.getElementById('categoryModalTitle').textContent = 'แก้ไขหมวดหมู่: ' + c.name;
+    document.getElementById('cMainCat').value = c.mainCat;
+    document.getElementById('cName').value = c.name;
+    document.getElementById('cOrder').value = c.order;
+    document.getElementById('cStatus').value = c.status;
+    document.getElementById('cHighlight').checked = c.highlight;
+    openModal('categoryModal');
+  }
+
+  document.getElementById('btnSaveCategory').addEventListener('click', async function(){
+    const name = document.getElementById('cName').value.trim();
+    const order = Number(document.getElementById('cOrder').value);
+    if(!name || !order){
+      alert('กรุณากรอกชื่อประเภทและลำดับแสดงให้ครบถ้วน');
+      return;
+    }
+    const mainCat = document.getElementById('cMainCat').value;
+    const status = document.getElementById('cStatus').value;
+    const highlight = document.getElementById('cHighlight').checked;
+    const idx = Number(document.getElementById('editingCatIndex').value);
+    const btn = document.getElementById('btnSaveCategory');
+    btn.disabled = true;
+    try {
+      if(idx >= 0){
+        const code = ADMIN_CATEGORIES[idx].code;
+        await apiCall('category.update', { code, mainCat, name, order, status, highlight });
+        await loadAdminData();
+        showToast('บันทึกการแก้ไขหมวดหมู่เรียบร้อย', '&#9989;');
+      } else {
+        await apiCall('category.create', { mainCat, name, order, highlight, status });
+        await loadAdminData();
+        showToast('เพิ่มหมวดหมู่ใหม่เรียบร้อย เว็บและเมนูจะอัปเดตตามทันที', '&#10133;');
+      }
+      closeModal('categoryModal');
+      renderCategoriesTable();
+    } catch(err){ showApiError(err); } finally { btn.disabled = false; }
+  });
+
+  (async function init(){
+    try { await loadAdminData(); } catch(err){ showApiError(err); return; }
+    renderCategoriesTable();
+  })();
+</script>
+</body>
+</html>
